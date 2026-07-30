@@ -689,6 +689,10 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .store-upcoming { background:#e3f2fd; color:#1a1f5e; }
 #bt-schedule-app .store-link { color:var(--navy); font-size:12px; text-decoration:none; padding:3px 10px; border:1.5px solid var(--navy); border-radius:4px; font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.05em; transition:all .15s; }
 #bt-schedule-app .store-link:hover { background:var(--navy); color:var(--white); }
+#bt-schedule-app .store-link-cell { display:flex; align-items:center; gap:6px; }
+#bt-schedule-app .store-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:26px; height:24px; padding:0; background:none; border:1.5px solid var(--gray-200); border-radius:4px; color:var(--gray-400); cursor:pointer; flex-shrink:0; transition:all .15s; }
+#bt-schedule-app .store-copy-btn:hover { border-color:var(--navy); color:var(--navy); background:#f4f6fb; }
+#bt-schedule-app .store-copy-btn.copied { border-color:#2e7d32; color:#2e7d32; background:#e8f5e9; }
 
 /* ── STORES CATEGORY HEADERS ── */
 #bt-schedule-app .stores-cat-hdr { background:var(--navy-dark); cursor:pointer; user-select:none; }
@@ -1453,6 +1457,51 @@ async function btLoadAndRenderStores() {
   btRenderStores();
 }
 
+/* ── COPY STORE URL ── */
+const BTP_COPY_ICON  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+const BTP_CHECK_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+function btAttr(v) {
+  return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function btCopyStoreLink(ev, btn) {
+  ev.preventDefault(); ev.stopPropagation();
+  const url = btn.dataset.copy || '';
+  if (!url) return;
+
+  const flash = () => {
+    btn.classList.add('copied');
+    btn.innerHTML = BTP_CHECK_ICON;
+    btn.title = 'Copied!';
+    clearTimeout(btn._btCopyTimer);
+    btn._btCopyTimer = setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = BTP_COPY_ICON;
+      btn.title = 'Copy store URL';
+    }, 1500);
+  };
+
+  const legacy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.setAttribute('readonly','');
+    ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, url.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+    if (ok) flash(); else window.prompt('Copy this URL:', url);
+  };
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(flash).catch(legacy);
+  } else {
+    legacy();
+  }
+}
+
 function btRenderStores() {
   const tbody = document.getElementById('btStoresBody');
   const cards = document.getElementById('btStoresCards');
@@ -1574,9 +1623,9 @@ function btRenderStores() {
         <td><span class="store-status-badge" style="${fStyle}">${store.fulfillment||'—'}</span></td>
         <td style="font-size:13px;line-height:1.35;">${store.contactName?`<span style="font-weight:600;color:#1a1f5e;display:block;font-size:14px;">${store.contactName}</span>`:''}${store.contactEmail?`<a href="mailto:${store.contactEmail}" onclick="event.stopPropagation()" style="color:#9ca3b8;font-size:12px;text-decoration:none;">${store.contactEmail}</a>`:(!store.contactName?'—':'')}</td>
         <td style="font-size:15px;color:#1a1f5e;line-height:1.4;">${store.notes||''}</td>
-        <td>${store.link?`<a href="${store.link}" class="store-link" target="_blank" onclick="event.stopPropagation()">VIEW</a>`:''}</td>`;
+        <td>${store.link?`<span class="store-link-cell"><a href="${store.link}" class="store-link" target="_blank" onclick="event.stopPropagation()">VIEW</a><button type="button" class="store-copy-btn" title="Copy store URL" data-copy="${btAttr(store.link)}" onclick="btCopyStoreLink(event,this)">${BTP_COPY_ICON}</button></span>`:''}</td>`;
 
-      tr.addEventListener('click', e => { if(e.target.tagName==='A'||e.target.classList.contains('store-drag-handle')) return; btOpenStoreModal(store.id); });
+      tr.addEventListener('click', e => { if(e.target.tagName==='A'||e.target.closest('.store-copy-btn')||e.target.classList.contains('store-drag-handle')) return; btOpenStoreModal(store.id); });
 
       tr.addEventListener('dragstart', e => {
         e.dataTransfer.setData('btStoreId', store.id);
@@ -1630,7 +1679,7 @@ function btRenderStores() {
             <span class="store-card-label">Close</span><span class="store-card-value">${fmtDate(store.closeDate,'N/A')}</span>
           </div>
           ${store.notes ? `<div class="store-card-notes">${store.notes}</div>` : ''}
-          ${store.link ? `<a href="${store.link}" class="store-link" target="_blank" style="align-self:flex-start">VIEW</a>` : ''}`;
+          ${store.link ? `<span class="store-link-cell" style="align-self:flex-start"><a href="${store.link}" class="store-link" target="_blank" onclick="event.stopPropagation()">VIEW</a><button type="button" class="store-copy-btn" title="Copy store URL" data-copy="${btAttr(store.link)}" onclick="btCopyStoreLink(event,this)">${BTP_COPY_ICON}</button></span>` : ''}`;
         cards.appendChild(card);
       }
     });
