@@ -1,7 +1,7 @@
 {
-  "version": "0.1.1",
-  "download_url": "https://raw.githubusercontent.com/strummer95/bt-portal/main/bt-portal-0.1.1.zip",
+  "version": "0.2.0",
+  "download_url": "https://raw.githubusercontent.com/strummer95/bt-portal/main/bt-portal-0.2.0.zip",
   "homepage": "https://boomerts.com",
   "tested": "6.7",
-  "changelog": "<h4>0.1.1</h4><ul><li>Stores tab: copy-to-clipboard icon beside each store's VIEW link — one click copies the full store URL. Shows a green check for 1.5s to confirm.</li><li>Works in the table view and the mobile card view; falls back to execCommand on non-secure contexts.</li></ul><h4>0.1.0</h4><ul><li>Initial plugin release — full port of the BT-Sched WPCode snippets (DB + crons, REST API, [bt_schedule] frontend, head CSS).</li><li>All PHP functions renamed btp_* so the plugin can coexist with the snippets during cutover.</li><li>Admin status page with update check.</li><li>Self-updater via GitHub manifest.</li></ul>"
+  "changelog": "<h4>0.2.0</h4><ul><li>Redirect module ported in from BT-Sched-5-Redirect — the /stores/ redirect portal and [bt_redirect_tab] now ship with the plugin. Deactivate the old snippet after updating.</li><li>Redirect tab: copy button on each URL Path row copies the full https link to the clipboard.</li><li>All option names, post meta keys, AJAX actions and the shortcode tag are unchanged, so existing redirect pages and click counts carry over untouched.</li></ul><h4>0.1.1</h4><ul><li>Stores tab: copy-to-clipboard icon beside each store's VIEW link.</li></ul><h4>0.1.0</h4><ul><li>Initial plugin release — full port of the BT-Sched WPCode snippets (DB + crons, REST API, [bt_schedule] frontend, head CSS).</li><li>Admin status page with update check, self-updater via GitHub manifest.</li></ul>"
 }
