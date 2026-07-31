@@ -2901,7 +2901,7 @@ function btInitQuoteTool() {
           <label>Decoration</label>
           <select id="btqMethod">
             <option value="print">Screen Print / DTF</option>
-            <option value="emb">Embroidery</option>
+            <option value="embroidery">Embroidery</option>
           </select>
         </div>
         <div class="q-field">
@@ -2917,15 +2917,6 @@ function btInitQuoteTool() {
         <div class="q-field">
           <label># of Print Locations</label>
           <select id="btqLocs"></select>
-        </div>
-        <div class="q-field">
-          <label>Max Colors (any location)</label>
-          <select id="btqColors">
-            <option value="1">1 Color</option>
-            <option value="2">2 Colors</option>
-            <option value="3">3 Colors</option>
-            <option value="4">4+ / Full Color</option>
-          </select>
         </div>
       </div>
       <div class="q-row" id="btqEmbRow" style="display:none;">
@@ -2958,21 +2949,37 @@ function btInitQuoteTool() {
     </div>`;
 
   (function() {
-    const METHODS = { print: 'Screen Print / DTF', emb: 'Embroidery' };
-    const LOCS = [1,2,3,4];
+    const METHODS = { print: 'Screen Print / DTF', embroidery: 'Embroidery' };
+    const LOCS = [1,2,3];
     const EMB_TYPES = [
-      {v:'left_chest', t:'Left Chest (up to 4")'},
-      {v:'full_front', t:'Full Front / Large'},
-      {v:'hat_front',  t:'Hat Front'},
+      {v:'text', t:'Text / Names'},
+      {v:'logo', t:'Logo'},
+      {v:'hard', t:'Hard to Handle'},
     ];
-    const GMTS = [
-      {v:'tshirt',      t:'T-Shirt (Basic)'},
-      {v:'tshirt_soft', t:'T-Shirt (Soft Style)'},
-      {v:'longsleeve',  t:'Long Sleeve'},
-      {v:'crewneck',    t:'Crewneck Sweatshirt'},
-      {v:'hoodie',      t:'Hoodie'},
-      {v:'custom',      t:'Custom / Other (enter cost)'},
-    ];
+    const GMTS = <?php
+      /* Built from BT Quote's live pricing tables so the portal can never drift
+         from the engine again. Labels mirror bt-quote/assets/quick-quote.js. */
+      $btp_labels = array(
+        'g5000'  => 'Standard Cotton Tee',   'g8000'  => 'DryBlend 50/50 Tee',
+        'g64000' => 'Softstyle Tee',         'bc3001' => 'Premium Tee',
+        'nl3600' => 'Premium Fitted Tee',    'c25100' => 'Performance Tee',
+        'g18000' => 'Crewneck Sweatshirt',   'g18500' => 'Standard Hoodie',
+      );
+      $btp_gmts = array();
+      if ( function_exists( 'btq_pricing_tables' ) ) {
+          $btp_T = btq_pricing_tables();
+          foreach ( array_keys( $btp_labels ) as $btp_k ) {
+              if ( array_key_exists( $btp_k, $btp_T['GARMENTS'] ) ) {
+                  $btp_gmts[] = array( 'v' => $btp_k, 't' => $btp_labels[ $btp_k ] );
+              }
+          }
+      } else {
+          foreach ( $btp_labels as $btp_k => $btp_v ) { $btp_gmts[] = array( 'v' => $btp_k, 't' => $btp_v ); }
+      }
+      $btp_gmts[] = array( 'v' => 'supplied', 't' => 'Customer Supplied' );
+      $btp_gmts[] = array( 'v' => 'custom',   't' => 'Custom / Other (enter cost)' );
+      echo wp_json_encode( $btp_gmts );
+    ?>;
 
     const $ = id => document.getElementById(id);
 
@@ -2987,7 +2994,7 @@ function btInitQuoteTool() {
     function btqAdj() {
       const method = $('btqMethod').value;
       $('btqPrintRow').style.display = method === 'print' ? 'flex' : 'none';
-      $('btqEmbRow').style.display   = method === 'emb'   ? 'flex' : 'none';
+      $('btqEmbRow').style.display   = method === 'embroidery' ? 'flex' : 'none';
       $('btqCustomWrap').style.display = $('btqGarment').value === 'custom' ? 'flex' : 'none';
       btqCalc();
     }
@@ -3007,12 +3014,11 @@ function btInitQuoteTool() {
         garment: $('btqGarment').value,
         qty:     qty,
       };
-      if (payload.garment === 'custom') payload.garment_cost = parseFloat($('btqCustomCost').value) || 0;
-      if (payload.method === 'print') {
-        payload.locations = parseInt($('btqLocs').value) || 1;
-        payload.colors    = parseInt($('btqColors').value) || 1;
+      if (payload.garment === 'custom') payload.retail = parseFloat($('btqCustomCost').value) || 0;
+      if (payload.method === 'embroidery') {
+        payload.embType = $('btqEmbType').value;
       } else {
-        payload.emb_type = $('btqEmbType').value;
+        payload.locations = parseInt($('btqLocs').value) || 1;
       }
       try {
         const r = await fetch('/wp-json/boomerts/v1/price', {
@@ -3021,8 +3027,15 @@ function btInitQuoteTool() {
           body: JSON.stringify(payload),
         });
         const data = await r.json();
-        if (!r.ok || data.error) throw new Error(data.error || 'Pricing error');
-        $('btqEach').innerHTML  = '$' + Number(data.each).toFixed(2) + '<span>/pc</span>';
+        if (!r.ok) throw new Error(data.message || data.error || 'Pricing error');
+        if (data.quote) {
+          $('btqEach').textContent  = 'By Quote';
+          $('btqTotal').textContent = '$—';
+          err.textContent = data.message || 'Contact for a quote at this quantity.';
+          err.style.display = 'block';
+          return;
+        }
+        $('btqEach').innerHTML  = '$' + Number(data.perShirt).toFixed(2) + '<span>/pc</span>';
         $('btqTotal').textContent = '$' + Number(data.total).toFixed(2);
       } catch(e) {
         $('btqEach').textContent = '$—';
@@ -3036,7 +3049,7 @@ function btInitQuoteTool() {
       window.open('https://www.boomerts.com/quote/', '_blank');
     };
 
-    ['btqMethod','btqGarment','btqLocs','btqColors','btqEmbType','btqQty','btqCustomCost'].forEach(id => {
+    ['btqMethod','btqGarment','btqLocs','btqEmbType','btqQty','btqCustomCost'].forEach(id => {
       const el = $(id);
       if (el) {
         el.addEventListener('change', btqAdj);
