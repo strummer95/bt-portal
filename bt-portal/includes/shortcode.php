@@ -625,6 +625,12 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .card-notes { font-size:13px; color:var(--gray-600); font-style:italic; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #bt-schedule-app .card-art-link { display:flex; align-items:center; gap:3px; background:var(--navy-dark); color:var(--white); font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:4px 8px; border-radius:3px; text-decoration:none; flex-shrink:0; transition:background .15s; }
 #bt-schedule-app .card-art-link:hover { background:var(--pink); }
+#bt-schedule-app .card-woo-btn { display:flex; align-items:center; gap:3px; background:#2E7D32; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:4px 9px; border:none; border-radius:3px; cursor:pointer; flex-shrink:0; transition:background .15s,transform .1s; }
+#bt-schedule-app .card-woo-btn:hover { background:#1B5E20; }
+#bt-schedule-app .card-woo-btn:active { transform:scale(.96); }
+#bt-schedule-app .card-woo-btn[disabled] { opacity:.5; cursor:wait; }
+#bt-schedule-app .card-woo-btn.is-done { background:transparent; color:#2E7D32; border:1px solid rgba(46,125,50,.45); cursor:default; }
+#bt-schedule-app .card-woo-btn.is-done:hover { background:transparent; }
 #bt-schedule-app .card-creator-bar { padding:4px 10px 6px; text-align:center; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--gray-600); border-top:1px solid var(--gray-100); }
 
 /* dept colors */
@@ -1233,7 +1239,7 @@ function btNormalizeJob(j) {
   }
   const garmentType = j.garment_type||j.garmentType||'';
   lineItems = lineItems.map(li => ({...li, garment: li.garment || garmentType}));
-  return { id:j.id, orderNum:j.order_num||j.orderNum||'', customer:j.customer||'', qty:parseInt(j.qty)||0, location, lineItems, garmentType, createdBy:j.created_by||j.createdBy||'', dept:j.dept||'', status:j.status||'None', dueDate:j.due_date||j.dueDate||'', artLink:j.art_link||j.artLink||'', notes:j.notes||'', caution: j.caution == 1 };
+  return { id:j.id, orderNum:j.order_num||j.orderNum||'', customer:j.customer||'', qty:parseInt(j.qty)||0, location, lineItems, garmentType, createdBy:j.created_by||j.createdBy||'', dept:j.dept||'', status:j.status||'None', dueDate:j.due_date||j.dueDate||'', artLink:j.art_link||j.artLink||'', notes:j.notes||'', caution: j.caution == 1, wooOrderId: parseInt(j.woo_order_id)||0, wooCompletedAt: j.woo_completed_at||'', wooCompletedBy: j.woo_completed_by||'' };
 }
 
 function btNormalizeStore(s) {
@@ -1430,6 +1436,14 @@ function btBuildCard(job) {
 
   const orderDisplay = job.orderNum ? (/^\d+$/.test(job.orderNum.trim()) ? `#${job.orderNum}` : job.orderNum) : '';
 
+  /* Transfers cards carry a WooCommerce order — production closes it out from here. */
+  let wooBtn = '';
+  if (job.dept === 'Transfers' && job.orderNum) {
+    wooBtn = job.wooCompletedAt
+      ? `<span class="card-woo-btn is-done" title="Completed in WooCommerce${job.wooCompletedBy ? ' by ' + job.wooCompletedBy : ''} — customer emailed">\u2713 ORDER DONE</span>`
+      : `<button class="card-woo-btn" data-woo-job="${job.id}" onclick="event.stopPropagation(); btWooComplete(${job.id}, this)" title="Complete this order in WooCommerce and email the customer">\u2713 COMPLETE ORDER</button>`;
+  }
+
   let detailsHtml = '';
   if (job.lineItems && job.lineItems.length > 1) {
     detailsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 0;">'
@@ -1479,10 +1493,11 @@ function btBuildCard(job) {
     </div>
     <div class="card-footer">
       ${job.notes ? `<span class="card-notes" title="${job.notes}">📝 ${job.notes}</span>` : '<span class="card-notes" style="opacity:0;">&nbsp;</span>'}
+      ${wooBtn}
       ${artBtn}
     </div>`;
 
-  card.addEventListener('click', e => { if(e.target.closest('.card-art-link')) return; btOpenModal(job.id); });
+  card.addEventListener('click', e => { if(e.target.closest('.card-art-link') || e.target.closest('.card-woo-btn')) return; btOpenModal(job.id); });
   card.addEventListener('contextmenu', e => { e.preventDefault(); btShowContextMenu(e, job.id); });
   return card;
 }
@@ -2035,6 +2050,65 @@ async function btQuickStatus(status) {
     btRenderBoard();
   } catch(e) {}
   btSaving(false);
+}
+
+/* ── WOOCOMMERCE: complete the order behind a Transfers card ──
+   Looks the order up first so the confirm shows who is about to get emailed. */
+async function btWooComplete(jobId, btn) {
+  const job = btJobs.find(j => j.id == jobId);
+  if (!job) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'CHECKING\u2026'; }
+
+  let info = null;
+  try {
+    info = await btFetch('/jobs/' + jobId + '/woo-order');
+  } catch(e) {
+    alert('Could not reach WooCommerce. Reload the portal and try again.');
+    btWooResetBtn(btn); return;
+  }
+  if (!info || !info.found) {
+    alert((info && info.message) || 'No WooCommerce order matches this card.');
+    btWooResetBtn(btn); return;
+  }
+
+  const msg = 'COMPLETE THIS ORDER IN WOOCOMMERCE?\n\n'
+    + 'Order:     #' + info.number + '\n'
+    + 'Customer:  ' + info.customer + '\n'
+    + 'Email:     ' + (info.email || '(none on order)') + '\n'
+    + 'Total:     ' + info.total + '\n'
+    + 'Items:     ' + info.item_count + '\n'
+    + 'Status:    ' + info.status_label + '\n\n'
+    + (info.status === 'completed'
+        ? 'This order is ALREADY completed. Nothing will be emailed.'
+        : 'This emails ' + (info.customer || 'the customer') + ' their order-complete notice. It cannot be undone from the portal.');
+
+  if (!confirm(msg)) { btWooResetBtn(btn); return; }
+
+  if (btn) btn.textContent = 'SENDING\u2026';
+  btSaving(true);
+  let res = null;
+  try {
+    res = await btFetch('/jobs/' + jobId + '/woo-complete', 'POST', {user_name: btUserName});
+  } catch(e) {
+    alert('The complete request failed. Check the order in WooCommerce before retrying.');
+    btSaving(false); btWooResetBtn(btn); return;
+  }
+  btSaving(false);
+
+  if (!res || !res.ok) {
+    alert((res && res.message) || 'WooCommerce would not complete that order.');
+    btWooResetBtn(btn); return;
+  }
+
+  alert(res.message);
+  await btLoadJobs();
+  btRenderBoard();
+}
+
+function btWooResetBtn(btn) {
+  if (!btn) return;
+  btn.disabled = false;
+  btn.textContent = '\u2713 COMPLETE ORDER';
 }
 
 function btEditFromContext() {
