@@ -761,16 +761,16 @@ add_shortcode( 'bt_schedule', function() {
 #btContextMenu .edit-item:hover { background:#0f1240; color:#fff; }
 
 /* ── MODALS ── */
-.bt-modal-overlay { display:none; position:fixed; inset:0; background:rgba(10,12,40,.75); z-index:999999; align-items:flex-start; justify-content:center; padding:16px; overflow-y:auto; }
-.bt-modal-overlay.open { display:flex; }
+.btp-modal-overlay { display:none; position:fixed; inset:0; background:rgba(10,12,40,.75); z-index:999999; align-items:flex-start; justify-content:center; padding:16px; overflow-y:auto; }
+.btp-modal-overlay.open { display:flex; }
 .bt-modal-wrap { background:#fff; border-radius:12px; width:100%; max-width:720px; margin:auto; box-shadow:0 20px 60px rgba(0,0,0,.4); font-family:'Barlow',sans-serif; animation:btModalIn .2s ease; }
 @keyframes btModalIn { from{opacity:0;transform:translateY(12px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
 .bt-modal-header { background:#0f1240; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; border-radius:12px 12px 0 0; }
 .bt-modal-title { font-family:'Oswald',sans-serif; font-size:18px; font-weight:700; color:#fff; letter-spacing:.06em; text-transform:uppercase; }
 .bt-modal-title span { color:#e91e8c; }
-.bt-modal-close { background:none; border:none; color:#9ca3b8; font-size:22px; cursor:pointer; padding:4px; line-height:1; }
-.bt-modal-close:hover { color:#fff; }
-.bt-modal-body { padding:16px 20px; display:flex; flex-direction:column; gap:11px; }
+.btp-modal-close { background:none; border:none; color:#9ca3b8; font-size:22px; cursor:pointer; padding:4px; line-height:1; }
+.btp-modal-close:hover { color:#fff; }
+.btp-modal-body { padding:16px 20px; display:flex; flex-direction:column; gap:11px; }
 .bt-form-row { display:grid; grid-template-columns:1fr 1fr; gap:11px; }
 .bt-form-group { display:flex; flex-direction:column; gap:4px; }
 .bt-form-group label { font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#5a6380; }
@@ -787,7 +787,7 @@ add_shortcode( 'bt_schedule', function() {
 .bt-select-option[data-val="None"].selected { background:#6b7280 !important; color:#fff !important; border-color:#6b7280 !important; }
 .bt-select-option[data-val="Pending Approval"].selected { background:#1a1f5e !important; color:#fff !important; border-color:#1a1f5e !important; }
 .bt-select-option[data-val="On Hold"].selected { background:#1a1f5e !important; color:#fff !important; border-color:#1a1f5e !important; }
-.bt-modal-footer { padding:12px 20px 16px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #e8eaf0; }
+.btp-modal-footer { padding:12px 20px 16px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #e8eaf0; }
 .bt-btn-cancel { background:#f4f5f9; color:#5a6380; border:none; padding:11px 22px; border-radius:6px; font-family:'Oswald',sans-serif; font-size:15px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }
 .bt-btn-save { background:#0f1240; color:#fff; border:none; padding:11px 26px; border-radius:6px; font-family:'Oswald',sans-serif; font-size:15px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }
 .bt-btn-save:hover { background:#e91e8c; }
@@ -1033,13 +1033,13 @@ add_shortcode( 'bt_schedule', function() {
 </div><!-- #bt-schedule-app -->
 
 <!-- JOB MODAL -->
-<div class="bt-modal-overlay" id="btModalOverlay" onclick="if(event.target===this)btCloseModal()">
+<div class="btp-modal-overlay" id="btpJobModalOverlay" onclick="if(event.target===this)btCloseModal()">
   <div class="bt-modal-wrap">
     <div class="bt-modal-header">
       <span class="bt-modal-title" id="btModalTitle">NEW <span>JOB</span></span>
-      <button class="bt-modal-close" onclick="btCloseModal()">&#215;</button>
+      <button class="btp-modal-close" onclick="btCloseModal()">&#215;</button>
     </div>
-    <div class="bt-modal-body">
+    <div class="btp-modal-body">
       <div class="bt-form-row">
         <div class="bt-form-group"><label>Due Date</label><input type="date" id="btFDueDate"></div>
         <div class="bt-form-group"><label>Order #</label><input type="text" id="btFOrderNum" placeholder="e.g. 2658901"></div>
@@ -1085,7 +1085,7 @@ add_shortcode( 'bt_schedule', function() {
         <label for="btFCaution" style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#f44336;cursor:pointer;margin:0;">⚠ Caution Flag — highlight this job</label>
       </div>
     </div>
-    <div class="bt-modal-footer">
+    <div class="btp-modal-footer">
       <button class="bt-btn-delete" id="btBtnDelete" onclick="btDeleteJob()" style="display:none">DELETE</button>
       <div style="flex:1;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.06em;color:#5a6380;text-transform:uppercase;" id="btModalAddedBy"></div>
       <button class="bt-btn-cancel" onclick="btCloseModal()">Cancel</button>
@@ -1095,13 +1095,13 @@ add_shortcode( 'bt_schedule', function() {
 </div>
 
 <!-- STORE MODAL -->
-<div class="bt-modal-overlay" id="btStoreModalOverlay" onclick="if(event.target===this)btCloseStoreModal()">
+<div class="btp-modal-overlay" id="btStoreModalOverlay" onclick="if(event.target===this)btCloseStoreModal()">
   <div class="bt-modal-wrap">
     <div class="bt-modal-header">
       <span class="bt-modal-title" id="btStoreModalTitle">NEW <span>STORE</span></span>
-      <button class="bt-modal-close" onclick="btCloseStoreModal()">&#215;</button>
+      <button class="btp-modal-close" onclick="btCloseStoreModal()">&#215;</button>
     </div>
-    <div class="bt-modal-body">
+    <div class="btp-modal-body">
       <div class="bt-form-group"><label>Store / School / Org Name</label><input type="text" id="btSfName" placeholder="e.g. Kaneland Eagles Spring 2025"></div>
       <div class="bt-form-row" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;">
         <div class="bt-form-group"><label>Open Date</label><input type="date" id="btSfOpen"></div>
@@ -1152,7 +1152,7 @@ add_shortcode( 'bt_schedule', function() {
         <select id="btSfCategory"><option value="">— Uncategorized —</option></select>
       </div>
     </div>
-    <div class="bt-modal-footer">
+    <div class="btp-modal-footer">
       <button class="bt-btn-delete" id="btBtnStoreDelete" onclick="btDeleteStore()" style="display:none">DELETE</button>
       <button class="bt-btn-cancel" onclick="btCloseStoreModal()">Cancel</button>
       <button class="bt-btn-save" onclick="btSaveStore()">SAVE STORE</button>
@@ -1885,7 +1885,7 @@ function btOpenModal(jobId, dateStr) {
   document.getElementById('btBtnDelete').style.display = jobId ? 'block' : 'none';
   document.getElementById('btModalTitle').innerHTML = jobId ? 'EDIT <span>JOB</span>' : 'NEW <span>JOB</span>';
   document.querySelectorAll('.bt-dept-grid .bt-select-option').forEach(o => o.classList.remove('selected'));
-  document.querySelectorAll('#btModalOverlay .bt-status-grid .bt-select-option').forEach(o => o.classList.remove('selected'));
+  document.querySelectorAll('#btpJobModalOverlay .bt-status-grid .bt-select-option').forEach(o => o.classList.remove('selected'));
   if (jobId) {
     const job = btJobs.find(j => j.id == jobId);
     document.getElementById('btFOrderNum').value = job.orderNum;
@@ -1927,8 +1927,8 @@ function btOpenModal(jobId, dateStr) {
     btSetLineItems([]);
     btSelectStatus('None');
   }
-  document.getElementById('btModalOverlay').classList.add('open');
-  document.querySelector('#btModalOverlay .bt-modal-wrap').scrollTop = 0;
+  document.getElementById('btpJobModalOverlay').classList.add('open');
+  document.querySelector('#btpJobModalOverlay .bt-modal-wrap').scrollTop = 0;
   const addedByEl = document.getElementById('btModalAddedBy');
   if (addedByEl) {
     if (jobId) {
@@ -1964,7 +1964,7 @@ function btOpenModalForDate(dateStr, e) {
 }
 
 function btCloseModal() {
-  document.getElementById('btModalOverlay').classList.remove('open');
+  document.getElementById('btpJobModalOverlay').classList.remove('open');
   btActiveJob = null;
 }
 
@@ -1974,7 +1974,7 @@ function btSelectDept(val) {
 }
 
 function btSelectStatus(val) {
-  document.querySelectorAll('#btModalOverlay .bt-status-grid .bt-select-option').forEach(o => o.classList.toggle('selected', o.dataset.val===val));
+  document.querySelectorAll('#btpJobModalOverlay .bt-status-grid .bt-select-option').forEach(o => o.classList.toggle('selected', o.dataset.val===val));
   document.getElementById('btFStatus').value = val;
 }
 
@@ -3085,7 +3085,7 @@ async function btDeleteContact(id) {
   // Auto-refresh every 15 seconds so all stations stay in sync
   setInterval(async () => {
     // Skip refresh while user is editing (modal open or dragging)
-    if (document.getElementById('btModalOverlay').classList.contains('open')) return;
+    if (document.getElementById('btpJobModalOverlay').classList.contains('open')) return;
     if (document.getElementById('btStoreModalOverlay').classList.contains('open')) return;
     if (document.querySelector('.job-card.dragging')) return;
     if (document.activeElement && document.activeElement.classList.contains('day-note-input')) return;
