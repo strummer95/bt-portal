@@ -22,6 +22,72 @@ add_shortcode( 'bt_schedule', function() {
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 #bt-schedule-app * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── QUICK QUOTE TAB SPACING ──────────────────────────────────────────────
+   The Quote tab renders BT Quote's [bt_quick_quote] shortcode. The reset
+   above is ID + universal (specificity 1,0,0), which outranks every class
+   rule in bt-quote/assets/quick-quote.css and flattens the tool's padding,
+   margins and gaps to zero — cards collapse, everything runs together.
+   These rules re-state the tool's own spacing at #bt-schedule-app + class
+   specificity so the reset can't win. Generated from quick-quote.css; if
+   that file's spacing changes, regenerate this block. ──────────────────── */
+#bt-schedule-app .bt-tool * { margin: 0; padding: 0; }
+#bt-schedule-app .bt-tool .bt-method { gap: 8px; margin-bottom: 10px; }
+#bt-schedule-app .bt-tool .method-btn { gap: 8px; padding: 12px 16px; }
+#bt-schedule-app .bt-tool .section-divider { gap: 12px; margin: 2px 0 6px; }
+#bt-schedule-app .bt-tool .step-title { margin-bottom: 6px; gap: 7px; }
+#bt-schedule-app .bt-tool .step-title-note { margin-left: auto; }
+#bt-schedule-app .bt-tool .bt-grid { gap: 8px; margin-bottom: 0; }
+#bt-schedule-app .bt-tool .left-col { gap: 8px; }
+#bt-schedule-app .bt-tool .bt-card { padding: 8px 12px; }
+#bt-schedule-app .bt-tool .qty-row { margin-bottom: 4px; }
+#bt-schedule-app .bt-tool .opt-list { gap: 4px; }
+#bt-schedule-app .bt-tool .opt-row { gap: 8px; padding: 4px 9px; }
+#bt-schedule-app .bt-tool .opt-sub { margin-top: 1px; }
+#bt-schedule-app .bt-tool .opt-badge { padding: 1px 6px; }
+#bt-schedule-app .bt-tool .gmt-grid { gap: 5px; }
+#bt-schedule-app .bt-tool .gmt-card { gap: 7px; padding: 4px 9px; }
+#bt-schedule-app .bt-tool .gmt-dot { margin-top: 2px; }
+#bt-schedule-app .bt-tool .gmt-sub { margin-top: 1px; }
+#bt-schedule-app .bt-tool .gmt-price { margin-top: 3px; padding: 1px 5px; }
+#bt-schedule-app .bt-tool .bt-bottom { gap: 8px; margin-bottom: 6px; }
+#bt-schedule-app .bt-tool .bt-results { padding: 11px 14px; }
+#bt-schedule-app .bt-tool .results-layout { gap: 7px; }
+#bt-schedule-app .bt-tool .price-side { padding-bottom: 7px; }
+#bt-schedule-app .bt-tool .price-eyebrow { margin-bottom: 3px; }
+#bt-schedule-app .bt-tool .price-display { margin-bottom: 3px; }
+#bt-schedule-app .bt-tool .price-cents { margin-top: 5px; }
+#bt-schedule-app .bt-tool .stat-row { gap: 4px; margin-bottom: 6px; }
+#bt-schedule-app .bt-tool .stat-box { padding: 3px 8px; }
+#bt-schedule-app .bt-tool .stat-lbl { margin-bottom: 2px; }
+#bt-schedule-app .bt-tool .stat-val.small { padding-top: 2px; }
+#bt-schedule-app .bt-tool .brk-wrap { padding-top: 8px; }
+#bt-schedule-app .bt-tool .brk-row { padding: 3px 0; }
+#bt-schedule-app .bt-tool .brk-total { margin-top: 4px; padding-top: 6px; }
+#bt-schedule-app .bt-tool .order-btn { margin-top: auto; padding-top: 7px; }
+#bt-schedule-app .bt-tool .order-btn button { padding: 8px 16px; gap: 8px; }
+#bt-schedule-app .bt-tool table th { padding: 6px 12px; }
+#bt-schedule-app .bt-tool table td { padding: 5px 12px; }
+#bt-schedule-app .bt-tool .bt-share { gap: 10px; margin-top: 2px; }
+#bt-schedule-app .bt-tool .bt-share-btn { gap: 7px; padding: 5px 14px; }
+#bt-schedule-app .bt-tool .bt-share-url { margin-top: 6px; padding: 6px 10px; }
+#bt-schedule-app .bt-modal-overlay { padding: 20px; }
+#bt-schedule-app .bt-modal-head { padding: 18px 22px 16px; }
+#bt-schedule-app .bt-modal-head h2 { margin-bottom: 3px; }
+#bt-schedule-app .bt-modal-summary { padding: 10px 22px; gap: 6px; }
+#bt-schedule-app .bt-sum-chip { padding: 3px 10px; }
+#bt-schedule-app .bt-modal-body { padding: 18px 22px; gap: 12px; }
+#bt-schedule-app .bt-field label { margin-bottom: 5px; }
+#bt-schedule-app .bt-field input, #bt-schedule-app .bt-field textarea { padding: 9px 12px; }
+#bt-schedule-app .bt-field-row { gap: 12px; }
+#bt-schedule-app .bt-modal-footer { padding: 0 22px 18px; gap: 10px; }
+#bt-schedule-app .bt-submit-btn { padding: 11px 18px; }
+#bt-schedule-app .bt-cancel-btn { padding: 11px 16px; }
+#bt-schedule-app .bt-modal-success { padding: 36px 22px; }
+#bt-schedule-app .bt-modal-success .check { margin-bottom: 12px; }
+#bt-schedule-app .bt-modal-success h3 { margin-bottom: 8px; }
+#bt-schedule-app .bt-tool .bt-foot { margin-top: 5px; padding-top: 7px; }
+
 #bt-schedule-app {
   --navy:#1a1f5e; --navy-dark:#0f1240; --navy-mid:#232875;
   --pink:#e91e8c; --pink-light:#ff47a8;
