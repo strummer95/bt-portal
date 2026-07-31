@@ -7,8 +7,19 @@
  */
 if (!defined('ABSPATH')) exit;
 
-add_shortcode( 'bt_schedule', function() {
+/* BT Quote owns the quote tool. Its shortcode enqueues its own stylesheet, but
+   that happens mid-content inside our shortcode, so the CSS lands late (or not
+   at all behind page caching) and the tool renders bare. Enqueue it up front on
+   the portal page instead — same handles, so BT Quote's own calls no-op. */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! defined( 'BTQ_URL' ) ) { return; }
+    $post = get_post();
+    if ( ! $post || ! has_shortcode( (string) $post->post_content, 'bt_schedule' ) ) { return; }
+    wp_enqueue_style( 'btq-oswald', 'https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap', array(), null );
+    wp_enqueue_style( 'btq-quick-quote', BTQ_URL . 'assets/quick-quote.css', array(), defined( 'BTQ_VERSION' ) ? BTQ_VERSION : null );
+}, 20 );
 
+add_shortcode( 'bt_schedule', function() {
 // --- Self-healing: ensure created_by column exists ---
     global $wpdb;
     $bt_jobs_tbl = $wpdb->prefix . 'bt_jobs';
@@ -21,7 +32,18 @@ add_shortcode( 'bt_schedule', function() {
     ?>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-#bt-schedule-app * { box-sizing: border-box; margin: 0; padding: 0; }
+/* The portal reset deliberately does NOT reach inside .bt-tool — that is BT
+   Quote's [bt_quick_quote] markup, rendered in the Quote tab. It ships its own
+   stylesheet (bt-quote/assets/quick-quote.css) with all of its spacing in class
+   rules; this reset is ID + universal (specificity 1,0,0) and would outrank
+   every one of them and flatten the tool. Excluding the subtree lets BT Quote
+   style its own tool, so the portal and the public /quote/ page stay identical
+   with no rules duplicated here to fall out of sync. */
+#bt-schedule-app *:not(.bt-tool):not(.bt-tool *) { box-sizing: border-box; margin: 0; padding: 0; }
+#bt-schedule-app .bt-tool, #bt-schedule-app .bt-tool * { box-sizing: border-box; }
+
+
+
 #bt-schedule-app {
   --navy:#1a1f5e; --navy-dark:#0f1240; --navy-mid:#232875;
   --pink:#e91e8c; --pink-light:#ff47a8;
@@ -971,7 +993,11 @@ add_shortcode( 'bt_schedule', function() {
 <!-- QUOTE TAB -->
 <div id="bt-tab-quote" class="tab-content" style="width:100%;box-sizing:border-box;">
   <div style="padding:32px 24px;background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
-    <div id="btQuoteTool" style="max-width:900px;margin:0 auto;box-sizing:border-box;"></div>
+    <div id="btQuoteTool" style="max-width:900px;margin:0 auto;box-sizing:border-box;">
+      <?php echo shortcode_exists('bt_quick_quote')
+          ? do_shortcode('[bt_quick_quote]')
+          : '<div style="padding:40px;text-align:center;color:#9ca3b8;font-family:Barlow,sans-serif;">Quote tool unavailable — the BT Quote plugin is not active.</div>'; ?>
+    </div>
   </div>
 </div>
 			
@@ -2860,206 +2886,10 @@ async function btRestoreFromBackup(id, label) {
 }
 
 /* ── QUOTE TOOL ── */
-let btQuoteToolLoaded = false;
-function btInitQuoteTool() {
-  if (btQuoteToolLoaded) return;
-  btQuoteToolLoaded = true;
-  const container = document.getElementById('btQuoteTool');
-  if (!container) return;
-
-  const style = document.createElement('style');
-  style.id = 'btQuoteToolStyle';
-  style.textContent = `
-    #btQuoteTool .q-card { background:#fff; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.08); padding:24px; margin-bottom:20px; font-family:'Barlow',sans-serif; }
-    #btQuoteTool .q-title { font-family:'Oswald',sans-serif; font-size:20px; font-weight:700; color:#0f1240; letter-spacing:.05em; text-transform:uppercase; margin-bottom:16px; }
-    #btQuoteTool .q-title span { color:#e91e8c; }
-    #btQuoteTool .q-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-    #btQuoteTool .q-field { display:flex; flex-direction:column; gap:4px; flex:1; min-width:140px; }
-    #btQuoteTool .q-field label { font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#5a6380; }
-    #btQuoteTool .q-field select, #btQuoteTool .q-field input { border:1.5px solid #e8eaf0; border-radius:6px; padding:9px 11px; font-family:'Barlow',sans-serif; font-size:14px; color:#0f1240; background:#fff; outline:none; }
-    #btQuoteTool .q-field select:focus, #btQuoteTool .q-field input:focus { border-color:#1a1f5e; }
-    #btQuoteTool .q-price-box { background:#0f1240; border-radius:10px; padding:20px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
-    #btQuoteTool .q-price-label { font-family:'Barlow Condensed',sans-serif; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#9ca3b8; }
-    #btQuoteTool .q-price-each { font-family:'Oswald',sans-serif; font-size:34px; font-weight:700; color:#fff; line-height:1; }
-    #btQuoteTool .q-price-each span { color:#e91e8c; }
-    #btQuoteTool .q-price-total { font-family:'Oswald',sans-serif; font-size:20px; font-weight:600; color:#9ca3b8; }
-    #btQuoteTool .q-note { font-size:12px; color:#9ca3b8; font-style:italic; margin-top:10px; }
-    #btQuoteTool .q-btn-row { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
-    #btQuoteTool .q-btn { background:#e91e8c; color:#fff; border:none; padding:11px 22px; border-radius:6px; font-family:'Oswald',sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
-    #btQuoteTool .q-btn:hover { background:#ff47a8; }
-    #btQuoteTool .q-btn.secondary { background:#f4f5f9; color:#5a6380; }
-    #btQuoteTool .q-btn.secondary:hover { background:#e8eaf0; }
-    #btQuoteTool .q-err { color:#b71c1c; font-size:13px; margin-top:8px; display:none; }
-  `;
-  document.head.appendChild(style);
-
-  container.innerHTML = `
-    <div class="q-card">
-      <div class="q-title">QUICK <span>QUOTE</span></div>
-      <div class="q-row">
-        <div class="q-field">
-          <label>Decoration</label>
-          <select id="btqMethod">
-            <option value="print">Screen Print / DTF</option>
-            <option value="embroidery">Embroidery</option>
-          </select>
-        </div>
-        <div class="q-field">
-          <label>Garment</label>
-          <select id="btqGarment"></select>
-        </div>
-        <div class="q-field" id="btqCustomWrap" style="display:none;">
-          <label>Garment Cost ($)</label>
-          <input type="number" id="btqCustomCost" min="0" step="0.01" placeholder="e.g. 8.50">
-        </div>
-      </div>
-      <div class="q-row" id="btqPrintRow">
-        <div class="q-field">
-          <label># of Print Locations</label>
-          <select id="btqLocs"></select>
-        </div>
-      </div>
-      <div class="q-row" id="btqEmbRow" style="display:none;">
-        <div class="q-field">
-          <label>Embroidery Type</label>
-          <select id="btqEmbType"></select>
-        </div>
-      </div>
-      <div class="q-row">
-        <div class="q-field">
-          <label>Quantity</label>
-          <input type="number" id="btqQty" min="1" value="24">
-        </div>
-      </div>
-      <div class="q-price-box">
-        <div>
-          <div class="q-price-label">Price Per Piece</div>
-          <div class="q-price-each" id="btqEach">$—</div>
-        </div>
-        <div>
-          <div class="q-price-label">Total</div>
-          <div class="q-price-total" id="btqTotal">$—</div>
-        </div>
-      </div>
-      <div class="q-err" id="btqErr"></div>
-      <div class="q-note">Internal estimate — uses the same pricing engine as the public quote form.</div>
-      <div class="q-btn-row">
-        <button class="q-btn secondary" onclick="btqOpenModal()">OPEN FULL QUOTE FORM ↗</button>
-      </div>
-    </div>`;
-
-  (function() {
-    const METHODS = { print: 'Screen Print / DTF', embroidery: 'Embroidery' };
-    const LOCS = [1,2,3];
-    const EMB_TYPES = [
-      {v:'text', t:'Text / Names'},
-      {v:'logo', t:'Logo'},
-      {v:'hard', t:'Hard to Handle'},
-    ];
-    const GMTS = <?php
-      /* Built from BT Quote's live pricing tables so the portal can never drift
-         from the engine again. Labels mirror bt-quote/assets/quick-quote.js. */
-      $btp_labels = array(
-        'g5000'  => 'Standard Cotton Tee',   'g8000'  => 'DryBlend 50/50 Tee',
-        'g64000' => 'Softstyle Tee',         'bc3001' => 'Premium Tee',
-        'nl3600' => 'Premium Fitted Tee',    'c25100' => 'Performance Tee',
-        'g18000' => 'Crewneck Sweatshirt',   'g18500' => 'Standard Hoodie',
-      );
-      $btp_gmts = array();
-      if ( function_exists( 'btq_pricing_tables' ) ) {
-          $btp_T = btq_pricing_tables();
-          foreach ( array_keys( $btp_labels ) as $btp_k ) {
-              if ( array_key_exists( $btp_k, $btp_T['GARMENTS'] ) ) {
-                  $btp_gmts[] = array( 'v' => $btp_k, 't' => $btp_labels[ $btp_k ] );
-              }
-          }
-      } else {
-          foreach ( $btp_labels as $btp_k => $btp_v ) { $btp_gmts[] = array( 'v' => $btp_k, 't' => $btp_v ); }
-      }
-      $btp_gmts[] = array( 'v' => 'supplied', 't' => 'Customer Supplied' );
-      $btp_gmts[] = array( 'v' => 'custom',   't' => 'Custom / Other (enter cost)' );
-      echo wp_json_encode( $btp_gmts );
-    ?>;
-
-    const $ = id => document.getElementById(id);
-
-    function fillSelect(sel, items, isObj) {
-      sel.innerHTML = items.map(i => isObj ? `<option value="${i.v}">${i.t}</option>` : `<option value="${i}">${i} Location${i>1?'s':''}</option>`).join('');
-    }
-    fillSelect($('btqGarment'), GMTS, true);
-    fillSelect($('btqLocs'), LOCS, false);
-    fillSelect($('btqEmbType'), EMB_TYPES, true);
-
-    let btqTimer = null;
-    function btqAdj() {
-      const method = $('btqMethod').value;
-      $('btqPrintRow').style.display = method === 'print' ? 'flex' : 'none';
-      $('btqEmbRow').style.display   = method === 'embroidery' ? 'flex' : 'none';
-      $('btqCustomWrap').style.display = $('btqGarment').value === 'custom' ? 'flex' : 'none';
-      btqCalc();
-    }
-
-    function btqCalc() {
-      clearTimeout(btqTimer);
-      btqTimer = setTimeout(btqFetch, 250);
-    }
-
-    async function btqFetch() {
-      const err = $('btqErr');
-      err.style.display = 'none';
-      const qty = parseInt($('btqQty').value) || 0;
-      if (qty < 1) return;
-      const payload = {
-        method:  $('btqMethod').value,
-        garment: $('btqGarment').value,
-        qty:     qty,
-      };
-      if (payload.garment === 'custom') payload.retail = parseFloat($('btqCustomCost').value) || 0;
-      if (payload.method === 'embroidery') {
-        payload.embType = $('btqEmbType').value;
-      } else {
-        payload.locations = parseInt($('btqLocs').value) || 1;
-      }
-      try {
-        const r = await fetch('/wp-json/boomerts/v1/price', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify(payload),
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.message || data.error || 'Pricing error');
-        if (data.quote) {
-          $('btqEach').textContent  = 'By Quote';
-          $('btqTotal').textContent = '$—';
-          err.textContent = data.message || 'Contact for a quote at this quantity.';
-          err.style.display = 'block';
-          return;
-        }
-        $('btqEach').innerHTML  = '$' + Number(data.perShirt).toFixed(2) + '<span>/pc</span>';
-        $('btqTotal').textContent = '$' + Number(data.total).toFixed(2);
-      } catch(e) {
-        $('btqEach').textContent = '$—';
-        $('btqTotal').textContent = '$—';
-        err.textContent = e.message || 'Could not calculate price.';
-        err.style.display = 'block';
-      }
-    }
-
-    window.btqOpenModal = function() {
-      window.open('https://www.boomerts.com/quote/', '_blank');
-    };
-
-    ['btqMethod','btqGarment','btqLocs','btqEmbType','btqQty','btqCustomCost'].forEach(id => {
-      const el = $(id);
-      if (el) {
-        el.addEventListener('change', btqAdj);
-        el.addEventListener('input', btqCalc);
-      }
-    });
-
-    btqAdj();
-  })();
-}
+/* The quote UI is owned by the BT Quote plugin and rendered server-side into
+   #btQuoteTool via the [bt_quick_quote] shortcode. The portal no longer carries
+   its own copy — the old inline version drifted out of sync with BT Quote's
+   pricing contract (garment IDs, param names, response keys) and 400'd. */
 
 /* ── TABS ── */
 function btSwitchTab(tab) {
@@ -3083,7 +2913,6 @@ function btSwitchTab(tab) {
 
   if (isStores) btLoadAndRenderStores();
   if (tab === 'contacts') btLoadContacts();
-  if (tab === 'quote') btInitQuoteTool();
 }
 
 /* ── ESC to close ── */
