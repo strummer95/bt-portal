@@ -7,18 +7,6 @@
  */
 if (!defined('ABSPATH')) exit;
 
-/* BT Quote owns the quote tool. Its shortcode enqueues its own stylesheet, but
-   that happens mid-content inside our shortcode, so the CSS lands late (or not
-   at all behind page caching) and the tool renders bare. Enqueue it up front on
-   the portal page instead — same handles, so BT Quote's own calls no-op. */
-add_action( 'wp_enqueue_scripts', function () {
-    if ( ! defined( 'BTQ_URL' ) ) { return; }
-    $post = get_post();
-    if ( ! $post || ! has_shortcode( (string) $post->post_content, 'bt_schedule' ) ) { return; }
-    wp_enqueue_style( 'btq-oswald', 'https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap', array(), null );
-    wp_enqueue_style( 'btq-quick-quote', BTQ_URL . 'assets/quick-quote.css', array(), defined( 'BTQ_VERSION' ) ? BTQ_VERSION : null );
-}, 20 );
-
 add_shortcode( 'bt_schedule', function() {
 // --- Self-healing: ensure created_by column exists ---
     global $wpdb;
@@ -39,7 +27,7 @@ add_shortcode( 'bt_schedule', function() {
    every one of them and flatten the tool. Excluding the subtree lets BT Quote
    style its own tool, so the portal and the public /quote/ page stay identical
    with no rules duplicated here to fall out of sync. */
-#bt-schedule-app *:not(.bt-tool):not(.bt-tool *) { box-sizing: border-box; margin: 0; padding: 0; }
+#bt-schedule-app *:where(:not(.bt-tool, .bt-tool *)) { box-sizing: border-box; margin: 0; padding: 0; }
 #bt-schedule-app .bt-tool, #bt-schedule-app .bt-tool * { box-sizing: border-box; }
 
 
@@ -994,9 +982,35 @@ add_shortcode( 'bt_schedule', function() {
 <div id="bt-tab-quote" class="tab-content" style="width:100%;box-sizing:border-box;">
   <div style="padding:32px 24px;background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
     <div id="btQuoteTool" style="max-width:900px;margin:0 auto;box-sizing:border-box;">
-      <?php echo shortcode_exists('bt_quick_quote')
-          ? do_shortcode('[bt_quick_quote]')
-          : '<div style="padding:40px;text-align:center;color:#9ca3b8;font-family:Barlow,sans-serif;">Quote tool unavailable — the BT Quote plugin is not active.</div>'; ?>
+      <?php
+      if ( shortcode_exists( 'bt_quick_quote' ) && defined( 'BTQ_URL' ) ) {
+          $btq_html = do_shortcode( '[bt_quick_quote]' );
+
+          /* BT Quote enqueues its stylesheet and script from inside its own
+             shortcode callback. That works on /quote/ but not here — this page
+             never printed them, so the tool rendered as bare HTML with no CSS
+             and no JS (every price stuck on a dash). Rather than depend on the
+             enqueue queue flushing on this template, take delivery over: drop
+             the queued copies and emit the exact same files inline, in order.
+             quick-quote.js is an IIFE that reads #btQuoteRoot on execution, so
+             it must come after the markup. */
+          wp_dequeue_style( 'btq-quick-quote' );
+          wp_dequeue_script( 'btq-quick-quote' );
+
+          $btq_ver = defined( 'BTQ_VERSION' ) ? BTQ_VERSION : null;
+          $btq_cfg = wp_json_encode( array(
+              'apiBase'  => home_url( '/wp-json/boomerts/v1' ),
+              'defaults' => array( 'qty' => '', 'g' => '', 'loc' => '', 'm' => '', 'et' => '', 'r' => '' ),
+          ) );
+
+          echo '<link rel="stylesheet" href="' . esc_url( add_query_arg( 'ver', $btq_ver, BTQ_URL . 'assets/quick-quote.css' ) ) . '">';
+          echo $btq_html;
+          echo '<script>window.BTQ_QQ = ' . $btq_cfg . ';</script>';
+          echo '<script src="' . esc_url( add_query_arg( 'ver', $btq_ver, BTQ_URL . 'assets/quick-quote.js' ) ) . '"></script>';
+      } else {
+          echo '<div style="padding:40px;text-align:center;color:#9ca3b8;font-family:Barlow,sans-serif;">Quote tool unavailable — the BT Quote plugin is not active.</div>';
+      }
+      ?>
     </div>
   </div>
 </div>

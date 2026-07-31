@@ -3,13 +3,13 @@
 Plugin Name: BT Portal
 Plugin URI: https://boomerts.com
 Description: Boomer T's employee portal — schedule board, online stores, contacts, day notes/capacity, backups, and the [bt_schedule] shortcode. Ported from the BT-Sched WPCode snippets.
-Version: 0.2.5
+Version: 0.2.6
 Author: Duck and Rabbit Co.
 */
 
 if (!defined('ABSPATH')) exit;
 
-define('BTP_VERSION', '0.2.5');
+define('BTP_VERSION', '0.2.6');
 define('BTP_DIR', plugin_dir_path(__FILE__));
 define('BTP_URL', plugin_dir_url(__FILE__));
 define('BTP_FILE', __FILE__);
