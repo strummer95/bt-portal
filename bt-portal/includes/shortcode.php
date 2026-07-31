@@ -631,6 +631,16 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .card-woo-btn[disabled] { opacity:.5; cursor:wait; }
 #bt-schedule-app .card-woo-btn.is-done { background:transparent; color:#2E7D32; border:1px solid rgba(46,125,50,.45); cursor:default; }
 #bt-schedule-app .card-woo-btn.is-done:hover { background:transparent; }
+
+/* Art path live preview (job modal) */
+.bt-art-preview { display:none; margin-top:6px; padding:6px 9px; border-radius:4px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:600; letter-spacing:.02em; line-height:1.35; }
+.bt-art-preview.is-ok, .bt-art-preview.is-warn, .bt-art-preview.is-bad { display:block; }
+.bt-art-preview code { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; font-weight:700; word-break:break-all; }
+.bt-art-preview .bt-art-preview-line { display:block; }
+.bt-art-preview .bt-art-preview-note { display:block; margin-top:3px; font-weight:600; opacity:.85; }
+.bt-art-preview.is-ok   { background:rgba(46,125,50,.10); color:#1B5E20; }
+.bt-art-preview.is-warn { background:rgba(245,124,0,.12); color:#8a4b00; }
+.bt-art-preview.is-bad  { background:rgba(244,67,54,.10); color:#b71c1c; }
 #bt-schedule-app .card-creator-bar { padding:4px 10px 6px; text-align:center; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--gray-600); border-top:1px solid var(--gray-100); }
 
 /* dept colors */
@@ -1078,7 +1088,7 @@ add_shortcode( 'bt_schedule', function() {
         </div>
         <input type="hidden" id="btFStatus">
       </div>
-     <div class="bt-form-group" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;"><label>Art File Path / Link</label><input type="text" id="btFArtLink" placeholder="\\BT-NAS\Production\Art\filename.ai  or  https://..."></div>
+     <div class="bt-form-group" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;"><label>Art File Path / Link</label><input type="text" id="btFArtLink" oninput="btArtPreview()" onchange="btArtPreview()" placeholder="Paste from Finder or Explorer — Mac and PC paths both work"><div class="bt-art-preview" id="btFArtPreview"></div></div>
       <div class="bt-form-group"><label>Notes</label><textarea id="btFNotes" placeholder="Special instructions, garment style, color details..."></textarea></div>
       <div class="bt-form-group" style="flex-direction:row;align-items:center;gap:8px;padding:8px 0 0;">
         <input type="checkbox" id="btFCaution" style="width:16px;height:16px;accent-color:#f44336;cursor:pointer;margin:0;">
@@ -1186,13 +1196,148 @@ let btActiveJob = null, btActiveStore = null, btContextJobId = null;
 let btDeptFilter = 'all', btStatusFilter = 'all', btStoreFilter = 'all', btWeekOffset = 0;
 
 
+/* ══ ART PATHS ═══════════════════════════════════════════════════════════
+   The board stores ONE canonical form: a Windows UNC path
+   (\\SERVER\SHARE\folder\file.ai), because that is what the btart:// helper
+   on the production PCs opens.
+
+   A Mac mounts \\SERVER\SHARE at /Volumes/SHARE, so the share name is already
+   sitting in any Mac path — only the server name has to be configured. Change
+   BT_ART_HOST if the file server is called something else. Add a line to
+   BT_ART_HOST_BY_SHARE only if a particular share lives on a DIFFERENT server. */
+const BT_ART_HOST = 'BoomerTs';
+const BT_ART_HOST_BY_SHARE = {
+  // 'share name in lower case': 'ServerName',
+  'btserver':   'BoomerTs',
+  'production': 'BT-NAS',
+};
+
+function btIsMac() {
+  const s = (navigator.userAgent || '') + ' ' + (navigator.platform || '');
+  return /Mac|iPhone|iPad|iPod/i.test(s);
+}
+
+/* Strip duplicate-mount suffixes: a share that was already mounted comes back
+   as "BTServer-1" or "BTServer 2". Same share, different volume name. */
+function btArtCleanShare(name) {
+  return String(name || '').replace(/[-_ ]\d+$/, '').trim();
+}
+
+function btArtHostFor(share) {
+  const k = String(share || '').toLowerCase();
+  return BT_ART_HOST_BY_SHARE[k] || BT_ART_HOST;
+}
+
+/* Understands every form a path arrives in — Finder Copy as Pathname, a drag
+   into the box, Connect to Server, Explorer's copy-as-path, a mapped drive, or
+   a web link. Returns { kind, unc, ok, message }. */
+function btParseArtPath(raw) {
+  const out = { kind: 'empty', unc: '', ok: true, message: '' };
+  let p = String(raw == null ? '' : raw).trim();
+  if (!p) return out;
+
+  // Wrapping quotes — Explorer's "Copy as path" adds them, Finder sometimes does too.
+  p = p.replace(/^["'\u201C\u2018\u00AB]+/, '').replace(/["'\u201D\u2019\u00BB]+$/, '').trim();
+  if (!p) return out;
+
+  // A real web link stays exactly as it is.
+  if (/^https?:\/\//i.test(p)) {
+    return { kind: 'url', unc: p, ok: true, message: 'Web link — opens in the browser.' };
+  }
+
+  // Dragged files and Finder copies arrive percent-encoded (%20 for spaces).
+  if (/%[0-9A-Fa-f]{2}/.test(p)) { try { p = decodeURIComponent(p); } catch (e) {} }
+
+  // file:///Volumes/... and file://localhost/Volumes/...
+  p = p.replace(/^file:\/\/(localhost)?/i, '').trim();
+
+  // smb:// cifs:// afp:// — Finder's Connect to Server and sidebar copies.
+  // An optional user@ in front of the host gets dropped.
+  let m = p.match(/^(?:smb|cifs|afp):\/\/(?:[^@\/]*@)?([^\/]+)\/(.+)$/i);
+  if (m) {
+    const host = m[1].replace(/\.(local|lan)$/i, '');
+    const rest = m[2].replace(/\/+$/, '').replace(/\//g, '\\');
+    return { kind: 'share', unc: '\\\\' + host + '\\' + rest, ok: true, message: '' };
+  }
+
+  // Already a UNC path (or //server/share typed with forward slashes).
+  if (/^\\\\[^\\]/.test(p) || /^\/\/[^\/]/.test(p)) {
+    const unc = '\\\\' + p.replace(/^[\\\/]{2}/, '').replace(/\//g, '\\');
+    return { kind: 'share', unc: unc.replace(/\\+$/, ''), ok: true, message: '' };
+  }
+
+  // Mac mount: /Volumes/SHARE/rest  ->  \\SERVER\SHARE\rest
+  m = p.match(/^\/Volumes\/([^\/]+)\/?(.*)$/i);
+  if (m) {
+    const share = btArtCleanShare(m[1]);
+    const host  = btArtHostFor(share);
+    const rest  = m[2].replace(/\/+$/, '').replace(/\//g, '\\');
+    const unc   = '\\\\' + host + '\\' + share + (rest ? '\\' + rest : '');
+    const known = Object.prototype.hasOwnProperty.call(BT_ART_HOST_BY_SHARE, share.toLowerCase());
+    return {
+      kind: 'share',
+      unc: unc,
+      ok: true,
+      message: known ? '' : 'Assuming the "' + share + '" share is on ' + host + '.'
+    };
+  }
+
+  // Mapped drive letter: Z:\Art\... — fine, but only on a PC mapped the same way.
+  if (/^[A-Za-z]:[\\\/]/.test(p) && !/^[A-Za-z]:[\\\/]Users[\\\/]/i.test(p)) {
+    return {
+      kind: 'drive',
+      unc: p.replace(/\//g, '\\'),
+      ok: true,
+      message: 'Mapped drive — only opens on a PC with that same drive letter mapped. A \\\\server\\share path is safer.'
+    };
+  }
+
+  // Somebody's own machine — nobody else can reach these.
+  if (/^\/Users\//i.test(p) || /^~\//.test(p) || /^\/(Desktop|Downloads|Documents)\//i.test(p)) {
+    return { kind: 'local', unc: p.replace(/\//g, '\\'), ok: false, message: 'This is a folder on your own Mac. Nobody else can open it — put the file on the server, then copy the path from there.' };
+  }
+  if (/^[A-Za-z]:[\\\/]Users[\\\/]/i.test(p)) {
+    return { kind: 'local', unc: p.replace(/\//g, '\\'), ok: false, message: 'This is a folder on your own PC. Nobody else can open it — put the file on the server first.' };
+  }
+  if (/^\//.test(p)) {
+    return { kind: 'local', unc: p.replace(/\//g, '\\'), ok: false, message: 'This looks like a local path, not one on the server. The production PC will not be able to open it.' };
+  }
+
+  // Anything else (a bare filename, a note) — store it, but flag it.
+  return { kind: 'plain', unc: p.replace(/\//g, '\\'), ok: false, message: 'Not a recognised server path — the ART button may not open anything.' };
+}
+
+/* Canonical value that gets saved and rendered. Same name/signature as before. */
 function btNormalizeArtPath(p) {
   if (!p) return '';
-  p = p.trim().replace(/^"|"$/g, '').trim();
-  if (/^https?:\/\//i.test(p)) return p;
-  p = p.replace(/^\/Volumes\/BTServer/i, '\\\\BoomerTs\\BTServer');
-  p = p.replace(/\//g, '\\');
-  return p;
+  const r = btParseArtPath(p);
+  return r.unc || '';
+}
+
+/* \\Server\Share\a\b.ai  ->  smb://Server/Share/a/b.ai  (Macs opening art) */
+function btUncToSmb(unc) {
+  if (!unc) return '';
+  const body = String(unc).replace(/^\\\\/, '').replace(/\\/g, '/');
+  return 'smb://' + body.split('/').map(function(seg){ return encodeURIComponent(seg); }).join('/');
+}
+
+/* Live feedback under the Art field in the job modal. */
+function btArtPreview() {
+  const input = document.getElementById('btFArtLink');
+  const box   = document.getElementById('btFArtPreview');
+  if (!input || !box) return;
+  const r = btParseArtPath(input.value);
+
+  if (r.kind === 'empty') { box.className = 'bt-art-preview'; box.innerHTML = ''; return; }
+  if (r.kind === 'url')   { box.className = 'bt-art-preview is-ok'; box.textContent = '🔗 ' + r.message; return; }
+
+  const cls  = !r.ok ? 'is-bad' : (r.message ? 'is-warn' : 'is-ok');
+  const icon = !r.ok ? '⚠' : (r.message ? '⚠' : '✓');
+  box.className = 'bt-art-preview ' + cls;
+  box.innerHTML = '<span class="bt-art-preview-line">' + icon + ' Production PC opens: <code></code></span>'
+                + (r.message ? '<span class="bt-art-preview-note"></span>' : '');
+  box.querySelector('code').textContent = r.unc;
+  if (r.message) box.querySelector('.bt-art-preview-note').textContent = r.message;
 }
 
 function btGetLocCount(locStr) {
@@ -1429,6 +1574,9 @@ function btBuildCard(job) {
   if (artPath) {
     if (/^https?:\/\//i.test(artPath)) {
       artBtn = `<a class="card-art-link" href="${artPath}" target="_blank" onclick="event.stopPropagation()">🎨 ART</a>`;
+    } else if (btIsMac()) {
+      /* Macs have no btart:// helper — hand Finder an smb:// URL instead. */
+      artBtn = `<a class="card-art-link" href="${btUncToSmb(artPath)}" title="${artPath}" onclick="event.stopPropagation()">🎨 ART</a>`;
     } else {
       artBtn = `<a class="card-art-link" href="btart://${artPath.replace(/ /g,'%20').replace(/\\/g,'%5C')}" onclick="event.stopPropagation()">🎨 ART</a>`;
     }
@@ -1892,6 +2040,7 @@ function btOpenModal(jobId, dateStr) {
     document.getElementById('btFDueDate').value  = job.dueDate;
     document.getElementById('btFCustomer').value = job.customer;
     document.getElementById('btFArtLink').value  = job.artLink;
+    btArtPreview();
     document.getElementById('btFNotes').value    = job.notes;
     document.getElementById('btFCaution').checked = !!job.caution;
     const gt = job.garmentType||'';
@@ -1917,6 +2066,7 @@ function btOpenModal(jobId, dateStr) {
     document.getElementById('btFDueDate').value  = dateStr || btTodayOffset(0);
     document.getElementById('btFCustomer').value = '';
     document.getElementById('btFArtLink').value  = '';
+    btArtPreview();
     document.getElementById('btFNotes').value    = '';
     document.getElementById('btFCaution').checked = false;
     document.querySelectorAll('.bt-garment-grid .bt-select-option').forEach(o => o.classList.remove('selected'));
