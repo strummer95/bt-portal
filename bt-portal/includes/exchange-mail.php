@@ -87,7 +87,7 @@ function btp_exchange_email_html( $order, $kind, $tracking ) {
     if ( $kind === 'received' ) {
         $headline = 'We got your exchange';
         $lead     = 'Your package arrived at the shop. We\'re working on it now and will ship your replacement out as soon as we can.';
-        $foot     = 'Exchanges usually take 7&ndash;10 days to process once they reach us. We\'ll email you again the moment yours ships.';
+        $foot     = 'Exchanges usually take up to 7&ndash;10 days to process once they reach us. We\'ll email you again the moment yours ships.';
     } else {
         $headline = 'Your exchange is on its way';
         $lead     = 'Your replacement has shipped and is heading back to you.';
