@@ -1083,6 +1083,12 @@ add_shortcode( 'bt_schedule', function() {
           $btq_cfg = wp_json_encode( array(
               'apiBase'  => home_url( '/wp-json/boomerts/v1' ),
               'defaults' => array( 'qty' => '', 'g' => '', 'loc' => '', 'm' => '', 'et' => '', 'r' => '' ),
+              /* The quote tool owns the address bar on /quote/, where that is
+                 the point. Here it is one tab of five, so it must not rewrite
+                 the portal's URL — and a copied quote link has to point the
+                 customer at /quote/, not at the employee portal. */
+              'syncUrl'   => false,
+              'shareBase' => home_url( '/quote/' ),
           ) );
 
           echo '<link rel="stylesheet" href="' . esc_url( add_query_arg( 'ver', $btq_ver, BTQ_URL . 'assets/quick-quote.css' ) ) . '">';
@@ -1251,6 +1257,20 @@ add_shortcode( 'bt_schedule', function() {
 <script>
 const btAPI   = '<?php echo esc_js( $api_base ); ?>';
 const btNonce = '<?php echo wp_create_nonce("wp_rest"); ?>';
+
+/* Before 0.5.2 the quote tool wrote its selections onto the portal's own URL,
+   so employees ended up on /employees/?qty=4&g=supplied&loc=2 and it stuck
+   through refreshes and bookmarks. The tool no longer does that; this clears
+   what it already left behind, once, on load. */
+(function () {
+  try {
+    const url = new URL(window.location.href);
+    const owned = ['qty','g','garment','loc','locations','m','method','et','embtype','emb','r','retail'];
+    let dirty = false;
+    owned.forEach(k => { if (url.searchParams.has(k)) { url.searchParams.delete(k); dirty = true; } });
+    if (dirty) window.history.replaceState(null, '', url.pathname + (url.search || '') + (url.hash || ''));
+  } catch (e) { /* older browser — the stale params are cosmetic */ }
+})();
 
 let btJobs = [], btStores = [], btStoreCategories = [];
 let btCollapsedCats = new Set();
