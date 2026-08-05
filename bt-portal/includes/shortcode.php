@@ -104,7 +104,7 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-filter { padding:5px 14px; border-radius:20px; border:1.5px solid #d8dbe6; background:#fff; color:#5a6079; font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
 #bt-schedule-app .ex-filter:hover { border-color:#0f1240; color:#0f1240; }
 #bt-schedule-app .ex-filter.active { background:#0f1240; border-color:#0f1240; color:#fff; }
-#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1500px; }
+#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1400px; }
 #bt-schedule-app .ex-table th { padding:10px 12px; text-align:left; background:#0f1240; color:#fff; font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.07em; text-transform:uppercase; font-size:15px; white-space:nowrap; }
 #bt-schedule-app .ex-table td { padding:12px; border-bottom:1px solid #e8eaf0; color:#0f1240; vertical-align:top; }
 #bt-schedule-app .ex-table tr:hover td { background:#f7f8fc; }
@@ -136,6 +136,12 @@ add_shortcode( 'bt_schedule', function() {
 .bt-toast.good a { color:#c9f7d5; }
 #bt-schedule-app .ex-qty { font-weight:700; color:#b26a00; }
 #bt-schedule-app .ex-table td.ex-c { text-align:center; white-space:nowrap; }
+/* The five item columns read as one block: tinted, and ruled off from the
+   customer details on the left and the workflow controls on the right. */
+#bt-schedule-app .ex-table td.ex-g { background:#f7f8fd; }
+#bt-schedule-app .ex-table tr:hover td.ex-g { background:#eef0fa; }
+#bt-schedule-app .ex-table th.ex-g1, #bt-schedule-app .ex-table td.ex-g1 { border-left:2px solid #c9cee4; }
+#bt-schedule-app .ex-table th.ex-g2, #bt-schedule-app .ex-table td.ex-g2 { border-right:2px solid #c9cee4; }
 #bt-schedule-app .ex-table td.ex-c .ex-wants { color:#1b5e20; font-weight:700; }
 #bt-schedule-app .ex-store { font-weight:600; color:#0f1240; font-size:16px; }
 #bt-schedule-app .ex-none { color:#9ca3b8; font-style:italic; font-size:15px; }
@@ -1081,16 +1087,16 @@ add_shortcode( 'bt_schedule', function() {
         <thead>
           <tr>
             <th style="width:130px;">Order</th>
-            <th style="width:180px;">Customer</th>
+            <th>Customer</th>
             <th style="width:150px;">School / Team</th>
-            <th>Product</th>
-            <th style="width:70px;">Size</th>
-            <th style="width:110px;">Color</th>
-            <th style="width:55px;">Qty</th>
-            <th style="width:95px;">New Size</th>
+            <th class="ex-g ex-g1" style="width:250px;">Product</th>
+            <th class="ex-g" style="width:70px;">Size</th>
+            <th class="ex-g" style="width:100px;">Color</th>
+            <th class="ex-g" style="width:55px;">Qty</th>
+            <th class="ex-g ex-g2" style="width:90px;">New Size</th>
             <th style="width:140px;">Status</th>
             <th style="width:150px;">Return Tracking</th>
-            <th style="width:170px;">Notes</th>
+            <th style="width:180px;">Notes</th>
             <th style="width:70px;"></th>
           </tr>
         </thead>
@@ -3611,11 +3617,11 @@ function btRenderExchanges() {
         '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.phone) + '</div>' +
         '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.address) + '</div></td>' +
       '<td>' + store + '</td>' +
-      '<td>' + items + cProduct + '</td>' +
-      '<td class="ex-c">' + cSize + '</td>' +
-      '<td class="ex-c">' + cColor + '</td>' +
-      '<td class="ex-c">' + cQty + '</td>' +
-      '<td class="ex-c">' + cNew + '</td>' +
+      '<td class="ex-g ex-g1">' + items + cProduct + '</td>' +
+      '<td class="ex-c ex-g">' + cSize + '</td>' +
+      '<td class="ex-c ex-g">' + cColor + '</td>' +
+      '<td class="ex-c ex-g">' + cQty + '</td>' +
+      '<td class="ex-c ex-g ex-g2">' + cNew + '</td>' +
       '<td>' + statusCell + updated + '</td>' +
       '<td><input class="ex-input" value="' + btEscHtml(x.tracking) + '" placeholder="Tracking #" ' +
         'onchange="btSaveExchange(' + x.order_id + ', {tracking:this.value})"></td>' +
