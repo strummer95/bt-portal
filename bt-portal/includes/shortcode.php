@@ -16,6 +16,17 @@ add_shortcode( 'bt_schedule', function() {
     }
 
     $api_base = rest_url( 'boomerts/v1' );
+
+    // Remember which page this is, so /employees/exchanges can be routed to it.
+    if ( function_exists('btp_note_portal_page') ) btp_note_portal_page();
+    $btp_initial_tab = function_exists('btp_requested_tab') ? btp_requested_tab() : '';
+    $btp_routing = wp_json_encode( array(
+        'base'   => function_exists('btp_portal_base_url') ? btp_portal_base_url() : '',
+        'pretty' => function_exists('btp_pretty_urls') ? btp_pretty_urls() : false,
+        'slugs'  => function_exists('btp_tab_slugs') ? btp_tab_slugs() : new stdClass(),
+        'initial'=> $btp_initial_tab ? $btp_initial_tab : 'schedule',
+    ) );
+
     ob_start();
     ?>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
@@ -1267,6 +1278,39 @@ add_shortcode( 'bt_schedule', function() {
 <script>
 const btAPI   = '<?php echo esc_js( $api_base ); ?>';
 const btNonce = '<?php echo wp_create_nonce("wp_rest"); ?>';
+
+/* ── URL routing ──
+   Each tab gets its own address: /employees/exchanges. On a site without
+   pretty permalinks, or before the rewrite rules have been flushed, this
+   falls back to ?tab=exchanges so a shared link still lands on the right
+   tab — it just looks worse. */
+const BT_ROUTE = <?php echo $btp_routing; ?>;
+
+function btTabUrl(tab) {
+  const slug = BT_ROUTE.slugs[tab];
+  if (!slug) return BT_ROUTE.base;
+  if (!BT_ROUTE.pretty) return BT_ROUTE.base + '?tab=' + slug;
+  // Schedule is the portal's front door; it keeps the bare URL.
+  return tab === 'schedule' ? BT_ROUTE.base : BT_ROUTE.base + slug;
+}
+
+function btTabFromUrl() {
+  const slugs = BT_ROUTE.slugs;
+  try {
+    const url = new URL(window.location.href);
+    const q = url.searchParams.get('tab');
+    if (q) {
+      for (const t in slugs) if (slugs[t] === q || t === q) return t;
+    }
+    const base = new URL(BT_ROUTE.base).pathname.replace(/\/+$/, '');
+    const here = url.pathname.replace(/\/+$/, '');
+    if (here.length > base.length && here.indexOf(base) === 0) {
+      const tail = here.slice(base.length + 1);
+      for (const t in slugs) if (slugs[t] === tail || t === tail) return t;
+    }
+  } catch (e) { /* fall through to the default */ }
+  return 'schedule';
+}
 
 /* Before 0.5.2 the quote tool wrote its selections onto the portal's own URL,
    so employees ended up on /employees/?qty=4&g=supplied&loc=2 and it stuck
@@ -3246,7 +3290,7 @@ document.addEventListener('click', function(e) {
   if (!e.target.closest || !e.target.closest('#btMoreTab')) btCloseMore();
 });
 
-function btSwitchTab(tab) {
+function btSwitchTab(tab, push) {
   document.querySelectorAll('#bt-schedule-app .header-tabs > .tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   document.querySelectorAll('#bt-schedule-app .tab-menu-item').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   document.querySelectorAll('#bt-schedule-app .tab-content').forEach(c => c.classList.remove('active'));
@@ -3275,7 +3319,21 @@ function btSwitchTab(tab) {
   if (isStores) btLoadAndRenderStores();
   if (tab === 'contacts') btLoadContacts();
   if (tab === 'exchanges') btLoadExchanges();
+
+  // pushState, so Back walks through the tabs the way people expect. Skipped
+  // when the switch came from the URL itself (initial load, Back button) —
+  // otherwise every restore would push a duplicate entry.
+  if (push !== false) {
+    try {
+      const next = btTabUrl(tab);
+      if (next && next !== window.location.href) window.history.pushState({ btTab: tab }, '', next);
+    } catch (e) {}
+  }
 }
+
+window.addEventListener('popstate', function() {
+  btSwitchTab(btTabFromUrl(), false);
+});
 
 /* ── ESC to close ── */
 function btEsc(e) {
@@ -3487,6 +3545,12 @@ async function btSaveExchange(orderId, patch) {
 
 /* ── INIT ── */
 (async function() {
+  // The server resolves /employees/exchanges; btTabFromUrl covers the ?tab=
+  // fallback and the window between saving the page and the rewrite rules
+  // being flushed.
+  const startTab = (BT_ROUTE.initial && BT_ROUTE.initial !== 'schedule') ? BT_ROUTE.initial : btTabFromUrl();
+  if (startTab && startTab !== 'schedule') btSwitchTab(startTab, false);
+
   try {
     const savedUser = localStorage.getItem('btUserName');
     if (savedUser) {
