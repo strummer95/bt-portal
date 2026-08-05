@@ -3404,7 +3404,10 @@ function btSwitchTab(tab, push) {
 
   if (isStores) btLoadAndRenderStores();
   if (tab === 'contacts') btLoadContacts();
-  if (tab === 'exchanges') btLoadExchanges();
+
+  // The exchange poll is tied to the tab, not the page.
+  if (tab === 'exchanges') { btLoadExchanges(); btStartExPoll(); }
+  else btStopExPoll();
 
   // pushState, so Back walks through the tabs the way people expect. Skipped
   // when the switch came from the URL itself (initial load, Back button) —
@@ -3419,6 +3422,12 @@ function btSwitchTab(tab, push) {
 
 window.addEventListener('popstate', function() {
   btSwitchTab(btTabFromUrl(), false);
+});
+
+/* Coming back to a backgrounded window, catch up immediately rather than
+   waiting out the rest of the interval on stale data. */
+document.addEventListener('visibilitychange', function() {
+  if (!document.hidden && btExPoll) btPollExchanges();
 });
 
 /* ── ESC to close ── */
@@ -3470,6 +3479,50 @@ async function btDeleteContact(id) {
    Woo owns the order; the portal owns only where the exchange physically is. */
 let btExData = { statuses: {}, exchanges: [] };
 let btExFilter = 'all';
+let btExPoll = null;
+
+/* The list is built from WooCommerce orders on every request — there is no
+   import step, so "checking for new orders" just means calling this again.
+   It runs only while the Exchanges tab is open: switching away clears the
+   timer, so the rest of the portal never pays for it. */
+const BT_EX_POLL_MS = 60000;
+
+function btStartExPoll() {
+  if (btExPoll) return;
+  btExPoll = setInterval(btPollExchanges, BT_EX_POLL_MS);
+}
+
+function btStopExPoll() {
+  clearInterval(btExPoll);
+  btExPoll = null;
+}
+
+async function btPollExchanges() {
+  // Nothing to see, or someone is mid-edit — a re-render would throw away
+  // half-typed tracking numbers and notes.
+  if (document.hidden) return;
+  if (!document.getElementById('bt-tab-exchanges').classList.contains('active')) return;
+  const a = document.activeElement;
+  if (a && a.closest && a.closest('#bt-tab-exchanges') && (a.tagName === 'INPUT' || a.tagName === 'SELECT')) return;
+
+  try {
+    const fresh = await btFetch('/exchanges');
+    const known = new Set((btExData.exchanges || []).map(x => x.order_id));
+    const added = (fresh.exchanges || []).filter(x => !known.has(x.order_id) && !x.hidden);
+
+    // Only repaint when something actually moved, so the table doesn't flicker
+    // under someone once a minute for no reason.
+    if (JSON.stringify(fresh) === JSON.stringify(btExData)) return;
+
+    btExData = fresh;
+    btRenderExchanges();
+    if (added.length) {
+      btToast(added.length === 1
+        ? 'New exchange in: <strong>#' + btEscHtml(added[0].number) + '</strong>.'
+        : '<strong>' + added.length + '</strong> new exchanges came in.', 'good');
+    }
+  } catch (e) { /* transient — the next tick tries again */ }
+}
 
 function btEscHtml(s) {
   return String(s == null ? '' : s)
