@@ -3264,12 +3264,12 @@ async function btLoadContacts() {
       const dateStr = isNaN(d) ? '' : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
       const msg = (c.message||'').length > 80 ? (c.message||'').slice(0,80)+'…' : (c.message||'');
       return `<tr style="border-bottom:1px solid #f0f1f5;">
-        <td style="padding:10px 14px;font-weight:600;color:#0f1240;white-space:nowrap;">${c.first_name||''} ${c.last_name||''}</td>
-        <td style="padding:10px 14px;">${c.school_org||''}</td>
-        <td style="padding:10px 14px;white-space:nowrap;">${c.city_state||''}</td>
-        <td style="padding:10px 14px;"><a href="mailto:${c.email||''}" style="color:#1a1f5e;">${c.email||''}</a></td>
-        <td style="padding:10px 14px;white-space:nowrap;">${c.phone||''}</td>
-        <td style="padding:10px 14px;font-size:15px;color:#5a6380;" title="${(c.message||'').replace(/"/g,'&quot;')}">${msg}</td>
+        <td style="padding:10px 14px;font-weight:600;color:#0f1240;white-space:nowrap;">${btEscHtml(c.first_name)} ${btEscHtml(c.last_name)}</td>
+        <td style="padding:10px 14px;">${btEscHtml(c.school_org)}</td>
+        <td style="padding:10px 14px;white-space:nowrap;">${btEscHtml(c.city_state)}</td>
+        <td style="padding:10px 14px;"><a href="mailto:${btEscHtml(c.email)}" style="color:#1a1f5e;">${btEscHtml(c.email)}</a></td>
+        <td style="padding:10px 14px;white-space:nowrap;">${btEscHtml(c.phone)}</td>
+        <td style="padding:10px 14px;font-size:15px;color:#5a6380;" title="${btEscHtml(c.message)}">${btEscHtml(msg)}</td>
         <td style="padding:10px 14px;white-space:nowrap;font-size:15px;color:#9ca3b8;">${dateStr}</td>
         <td style="padding:10px 14px;"><button onclick="btDeleteContact(${c.id})" style="background:#ffebee;color:#b71c1c;border:none;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.05em;">DELETE</button></td>
       </tr>`;
