@@ -77,6 +77,33 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .tab { padding:6px 16px; font-family:'Oswald',sans-serif; font-size:14px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--gray-400); cursor:pointer; border-radius:20px; border:1.5px solid transparent; display:flex; align-items:center; transition:all .15s; }
 #bt-schedule-app .tab:hover { color:var(--white); }
 #bt-schedule-app .tab.active { color:var(--pink); border-color:var(--pink); background:rgba(233,30,140,.1); }
+
+/* ── OTHER dropdown ── */
+#bt-schedule-app .tab-more { position:relative; gap:5px; }
+#bt-schedule-app .tab-more .caret { transition:transform .15s; }
+#bt-schedule-app .tab-more.open .caret { transform:rotate(180deg); }
+#bt-schedule-app .tab-menu { position:absolute; top:calc(100% + 8px); right:0; min-width:200px; background:var(--navy-dark); border:1px solid rgba(255,255,255,.15); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.4); z-index:600; display:none; padding:6px; }
+#bt-schedule-app .tab-more.open .tab-menu { display:block; }
+#bt-schedule-app .tab-menu-item { display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:6px; font-family:'Oswald',sans-serif; font-size:13px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--gray-400); cursor:pointer; white-space:nowrap; transition:all .15s; }
+#bt-schedule-app .tab-menu-item:hover { background:rgba(255,255,255,.07); color:var(--white); }
+#bt-schedule-app .tab-menu-item.active { color:var(--pink); background:rgba(233,30,140,.12); }
+
+/* ── EXCHANGES ── */
+#bt-schedule-app .ex-filters { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#bt-schedule-app .ex-filter { padding:5px 14px; border-radius:20px; border:1.5px solid #d8dbe6; background:#fff; color:#5a6079; font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
+#bt-schedule-app .ex-filter:hover { border-color:#0f1240; color:#0f1240; }
+#bt-schedule-app .ex-filter.active { background:#0f1240; border-color:#0f1240; color:#fff; }
+#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1000px; }
+#bt-schedule-app .ex-table th { padding:10px 12px; text-align:left; background:#0f1240; color:#fff; font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.07em; text-transform:uppercase; font-size:15px; white-space:nowrap; }
+#bt-schedule-app .ex-table td { padding:12px; border-bottom:1px solid #e8eaf0; color:#0f1240; vertical-align:top; }
+#bt-schedule-app .ex-table tr:hover td { background:#f7f8fc; }
+#bt-schedule-app .ex-pill { display:inline-block; padding:3px 10px; border-radius:12px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+#bt-schedule-app .ex-pill.awaiting { background:#fff3e0; color:#b26a00; }
+#bt-schedule-app .ex-pill.received { background:#e3f2fd; color:#0d47a1; }
+#bt-schedule-app .ex-pill.shipped  { background:#e8f5e9; color:#1b5e20; }
+#bt-schedule-app .ex-select { font-family:'Barlow',sans-serif; font-size:15px; padding:6px 8px; border:1.5px solid #d8dbe6; border-radius:6px; background:#fff; color:#0f1240; cursor:pointer; }
+#bt-schedule-app .ex-input { font-family:'Barlow',sans-serif; font-size:15px; padding:6px 8px; border:1.5px solid #d8dbe6; border-radius:6px; width:100%; box-sizing:border-box; color:#0f1240; }
+#bt-schedule-app .ex-input:focus, #bt-schedule-app .ex-select:focus { outline:none; border-color:var(--pink); }
 #bt-schedule-app .header-actions { display:flex; align-items:center; gap:10px; padding:8px 16px; flex-shrink:0; border-left:1px solid rgba(255,255,255,.1); }
 #bt-schedule-app .filter-toggle-btn { background:rgba(255,255,255,.07); border:1.5px solid rgba(255,255,255,.12); color:var(--gray-400); font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; padding:6px 12px; border-radius:6px; display:flex; align-items:center; gap:5px; transition:all .15s; white-space:nowrap; }
 #bt-schedule-app .filter-toggle-btn:hover { color:var(--white); border-color:rgba(255,255,255,.3); background:rgba(255,255,255,.1); }
@@ -867,9 +894,16 @@ add_shortcode( 'bt_schedule', function() {
       <div class="header-tabs">
         <div class="tab active" data-tab="schedule" onclick="btSwitchTab('schedule')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:5px;vertical-align:middle;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule</div>
         <div class="tab" data-tab="stores" onclick="btSwitchTab('stores')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:5px;vertical-align:middle;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Online Stores</div>
-        <div class="tab" data-tab="contacts" onclick="btSwitchTab('contacts')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:5px;vertical-align:middle;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts</div>
         <div class="tab" data-tab="quote" onclick="btSwitchTab('quote')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:5px;vertical-align:middle;"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Quote</div>
         <div class="tab" data-tab="redirect" onclick="btSwitchTab('redirect')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:5px;vertical-align:middle;"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>Redirect</div>
+        <div class="tab tab-more" id="btMoreTab" onclick="btToggleMore(event)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:5px;vertical-align:middle;"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg><span id="btMoreLabel">Other</span>
+          <svg class="caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <div class="tab-menu" id="btMoreMenu">
+            <div class="tab-menu-item" data-tab="contacts" onclick="btSwitchTab('contacts')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts</div>
+            <div class="tab-menu-item" data-tab="exchanges" onclick="btSwitchTab('exchanges')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Exchanges</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -987,6 +1021,34 @@ add_shortcode( 'bt_schedule', function() {
         </thead>
         <tbody id="btContactsBody">
           <tr><td colspan="8" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- EXCHANGES TAB -->
+<div id="bt-tab-exchanges" class="tab-content">
+  <div style="padding:24px 28px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px;">
+      <h2 style="margin:0;font-family:'Oswald',sans-serif;font-size:1.3em;color:#0f1240;letter-spacing:.04em;text-transform:uppercase;">Exchanges</h2>
+      <div class="ex-filters" id="btExFilters"></div>
+      <button onclick="btLoadExchanges()" class="ex-filter" style="border-color:#0f1240;color:#0f1240;">Refresh</button>
+    </div>
+    <div style="overflow-x:auto;border-radius:8px;border:1px solid #e8eaf0;">
+      <table class="ex-table">
+        <thead>
+          <tr>
+            <th style="width:130px;">Order</th>
+            <th style="width:190px;">Customer</th>
+            <th>Exchanging For</th>
+            <th style="width:150px;">Status</th>
+            <th style="width:160px;">Return Tracking</th>
+            <th style="width:200px;">Notes</th>
+          </tr>
+        </thead>
+        <tbody id="btExBody">
+          <tr><td colspan="6" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -3130,10 +3192,37 @@ async function btRestoreFromBackup(id, label) {
    pricing contract (garment IDs, param names, response keys) and 400'd. */
 
 /* ── TABS ── */
+/* Tabs that live inside the OTHER dropdown rather than on the bar itself.
+   Add a tab here and it needs nothing else in this function. */
+const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges' };
+
+function btToggleMore(e) {
+  // Clicks on the menu items bubble up to this handler; ignore them so the
+  // menu doesn't reopen the instant a selection closes it.
+  if (e && e.target.closest && e.target.closest('.tab-menu')) return;
+  document.getElementById('btMoreTab').classList.toggle('open');
+}
+
+function btCloseMore() {
+  const m = document.getElementById('btMoreTab');
+  if (m) m.classList.remove('open');
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest || !e.target.closest('#btMoreTab')) btCloseMore();
+});
+
 function btSwitchTab(tab) {
-  document.querySelectorAll('#bt-schedule-app .tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('#bt-schedule-app .header-tabs > .tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('#bt-schedule-app .tab-menu-item').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   document.querySelectorAll('#bt-schedule-app .tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('bt-tab-'+tab).classList.add('active');
+
+  const moreTab = document.getElementById('btMoreTab');
+  const inMore  = Object.prototype.hasOwnProperty.call(BT_MORE_TABS, tab);
+  moreTab.classList.toggle('active', inMore);
+  moreTab.classList.remove('open');
+  document.getElementById('btMoreLabel').textContent = inMore ? BT_MORE_TABS[tab] : 'Other';
 
   const isStores = tab === 'stores';
   const isSchedule = tab === 'schedule';
@@ -3151,11 +3240,12 @@ function btSwitchTab(tab) {
 
   if (isStores) btLoadAndRenderStores();
   if (tab === 'contacts') btLoadContacts();
+  if (tab === 'exchanges') btLoadExchanges();
 }
 
 /* ── ESC to close ── */
 function btEsc(e) {
-  if (e.key === 'Escape') { btCloseModal(); btCloseStoreModal(); btCloseContextMenu(); btCloseBackupPanel(); }
+  if (e.key === 'Escape') { btCloseModal(); btCloseStoreModal(); btCloseContextMenu(); btCloseBackupPanel(); btCloseMore(); }
 }
 document.addEventListener('keydown', btEsc);
 
@@ -3195,6 +3285,116 @@ async function btDeleteContact(id) {
     await btFetch('/contacts/'+id, 'DELETE');
     btLoadContacts();
   } catch(e) { alert('Error deleting contact.'); }
+}
+
+/* ── EXCHANGES ──
+   Rows are WooCommerce orders that contain the Exchange Shipping product.
+   Woo owns the order; the portal owns only where the exchange physically is. */
+let btExData = { statuses: {}, exchanges: [] };
+let btExFilter = 'all';
+
+function btEscHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+async function btLoadExchanges() {
+  const tbody = document.getElementById('btExBody');
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
+  try {
+    btExData = await btFetch('/exchanges');
+    btRenderExchanges();
+  } catch(e) {
+    const expired = String(e.message||'').indexOf('403') !== -1;
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:40px;text-align:center;color:#b71c1c;">' +
+      (expired ? 'Session expired — reload the page.' : 'Error loading exchanges.') + '</td></tr>';
+  }
+}
+
+function btSetExFilter(f) { btExFilter = f; btRenderExchanges(); }
+
+function btRenderExchanges() {
+  const statuses = btExData.statuses || {};
+  const all = btExData.exchanges || [];
+
+  const counts = { all: all.length };
+  Object.keys(statuses).forEach(k => counts[k] = all.filter(x => x.status === k).length);
+
+  document.getElementById('btExFilters').innerHTML =
+    ['all'].concat(Object.keys(statuses)).map(k => {
+      const label = k === 'all' ? 'All' : statuses[k];
+      return '<button class="ex-filter' + (btExFilter === k ? ' active' : '') + '" onclick="btSetExFilter(\'' + k + '\')">' +
+             btEscHtml(label) + ' (' + (counts[k] || 0) + ')</button>';
+    }).join('');
+
+  const rows = btExFilter === 'all' ? all : all.filter(x => x.status === btExFilter);
+  const tbody = document.getElementById('btExBody');
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
+      (all.length ? 'Nothing in this status.' : 'No exchange orders yet.') + '</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(x => {
+    const d = new Date((x.date || '').replace(' ', 'T'));
+    const dateStr = isNaN(d) ? '' : d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+
+    const items = (x.items || []).map(it => {
+      const meta = (it.meta || []).map(m =>
+        '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(m.key) + ': ' + btEscHtml(m.value) + '</div>'
+      ).join('');
+      return '<div style="margin-bottom:6px;"><span style="font-weight:600;">' + btEscHtml(it.name) +
+             '</span> &times;' + it.qty + meta + '</div>';
+    }).join('') || '<span style="color:#9ca3b8;font-style:italic;">Shipping only</span>';
+
+    const note = x.customer_note
+      ? '<div style="margin-top:6px;padding:6px 8px;background:#fff8e1;border-radius:4px;font-size:14px;color:#6b5200;">' + btEscHtml(x.customer_note) + '</div>'
+      : '';
+
+    const updated = x.updated_at
+      ? '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.updated_by || '—') + ' &middot; ' +
+        btEscHtml((x.updated_at || '').slice(5, 10)) + '</div>'
+      : '';
+
+    const opts = Object.keys(statuses).map(k =>
+      '<option value="' + k + '"' + (x.status === k ? ' selected' : '') + '>' + btEscHtml(statuses[k]) + '</option>'
+    ).join('');
+
+    return '<tr>' +
+      '<td><a href="' + btEscHtml(x.edit_url) + '" target="_blank" rel="noopener" style="color:#1a1f5e;font-weight:700;">#' + btEscHtml(x.number) + '</a>' +
+        '<div style="font-size:14px;color:#9ca3b8;">' + dateStr + '</div>' +
+        '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.woo_status_lbl) + '</div></td>' +
+      '<td><div style="font-weight:600;">' + btEscHtml(x.customer) + '</div>' +
+        '<a href="mailto:' + btEscHtml(x.email) + '" style="color:#1a1f5e;font-size:14px;">' + btEscHtml(x.email) + '</a>' +
+        '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.phone) + '</div>' +
+        '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.address) + '</div></td>' +
+      '<td>' + items + note + '</td>' +
+      '<td><select class="ex-select" onchange="btSaveExchange(' + x.order_id + ', {status:this.value})">' + opts + '</select>' + updated + '</td>' +
+      '<td><input class="ex-input" value="' + btEscHtml(x.tracking) + '" placeholder="Tracking #" ' +
+        'onchange="btSaveExchange(' + x.order_id + ', {tracking:this.value})"></td>' +
+      '<td><input class="ex-input" value="' + btEscHtml(x.notes) + '" placeholder="Notes" ' +
+        'onchange="btSaveExchange(' + x.order_id + ', {notes:this.value})"></td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function btSaveExchange(orderId, patch) {
+  const row = (btExData.exchanges || []).find(x => x.order_id === orderId);
+  if (!row) return;
+  btSaving(true);
+  try {
+    const saved = await btFetch('/exchanges/' + orderId, 'POST', Object.assign({
+      status: row.status, tracking: row.tracking, notes: row.notes, user_name: btUserName
+    }, patch));
+    Object.assign(row, saved);
+    btRenderExchanges();
+  } catch(e) {
+    alert('Could not save the exchange. ' + (String(e.message||'').indexOf('403') !== -1 ? 'Reload the page and try again.' : ''));
+  } finally {
+    btSaving(false);
+  }
 }
 
 /* ── INIT ── */
