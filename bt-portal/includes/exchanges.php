@@ -169,11 +169,20 @@ function btp_exchange_row( $order_id ) {
  */
 function btp_parse_exchange_note( $note ) {
     $note = trim( (string) $note );
-    $out  = array( 'original_order' => '', 'items' => array(), 'raw' => $note, 'parsed' => false );
+    $out  = array( 'original_order' => '', 'store' => '', 'items' => array(), 'raw' => $note, 'parsed' => false );
     if ( $note === '' ) return $out;
 
     if ( preg_match( '/Original Order\s*#?\s*:\s*([^\s]+)/i', $note, $m ) ) {
         $out['original_order'] = trim( $m[1], " \t,." );
+    }
+
+    // School/Team, however the form ends up labelling it. Stops at the next
+    // known label so the rest of the sentence doesn't get swallowed.
+    if ( preg_match(
+        '/(?:School\s*\/\s*Team|School or Team|School|Team|Store|Organization)\s*:\s*(.+?)\s*(?=Customer\s*:|Ship\s*to\s*:|Original Order|Item\s*\d+\s*:|$)/is',
+        $note, $m
+    ) ) {
+        $out['store'] = trim( $m[1], " \t,.-" );
     }
 
     // Split on "Item N:" so multi-item requests come through as separate rows.
@@ -205,7 +214,7 @@ function btp_parse_exchange_note( $note ) {
         }
     }
 
-    $out['parsed'] = ( $out['original_order'] !== '' || ! empty( $out['items'] ) );
+    $out['parsed'] = ( $out['original_order'] !== '' || $out['store'] !== '' || ! empty( $out['items'] ) );
     return $out;
 }
 
@@ -295,6 +304,22 @@ function btp_exchange_payload( $order ) {
     $ship     = preg_replace( '/<br\s*\/?>/i', ', ', (string) $ship_raw );
     $ship     = trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $ship ) ), " ,\t\n" );
 
+    $request = btp_parse_exchange_note( $order->get_customer_note() );
+
+    /* School/Team can arrive three ways depending on how the form is wired:
+       inside the request note, as order meta, or as meta on the shipping line.
+       Whichever exists wins, in that order, so the portal keeps working
+       through a change to the form rather than needing a release to match. */
+    $store = $request['store'];
+    if ( $store === '' ) {
+        foreach ( $extra as $m ) {
+            if ( preg_match( '/(school|team|store|organization|group)/i', $m['key'] ) && $m['value'] !== '' ) {
+                $store = $m['value'];
+                break;
+            }
+        }
+    }
+
     return array(
         'order_id'      => $order->get_id(),
         'number'        => $order->get_order_number(),
@@ -316,7 +341,8 @@ function btp_exchange_payload( $order ) {
         'phone'         => $order->get_billing_phone(),
         'address'       => $ship,
         'customer_note' => $order->get_customer_note(),
-        'request'       => btp_parse_exchange_note( $order->get_customer_note() ),
+        'request'       => $request,
+        'store'         => $store,
         'extra'         => $extra,
         'edit_url'      => $order->get_edit_order_url(),
         'items'         => $items,
