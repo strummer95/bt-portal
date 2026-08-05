@@ -210,6 +210,39 @@ function btp_parse_exchange_note( $note ) {
 }
 
 /**
+ * Order meta is a junk drawer — tax plugins, shipping plugins and the like all
+ * park flags there (is_vat_exempt, tefw_exempt). None of it means anything to
+ * someone processing an exchange, so it is filtered out before display.
+ *
+ * The rule is deliberately blunt: a bare flag tells staff nothing useful in a
+ * table whatever it is called, and anything prefixed like a system field is
+ * not a human-entered exchange detail. Add keys via the filter if something
+ * else creeps in; no release needed for that.
+ */
+function btp_exchange_meta_is_noise( $key, $value ) {
+    $k = strtolower( trim( (string) $key ) );
+    $v = strtolower( trim( (string) $value ) );
+
+    $blocked = apply_filters( 'btp_exchange_meta_blocklist', array(
+        'is_vat_exempt', 'tefw_exempt', 'vat_number', 'vat_exempt',
+        'shipping_phone', 'billing_phone', 'order_key', 'cart_hash',
+        'customer_ip_address', 'customer_user_agent', 'created_via',
+    ) );
+
+    if ( in_array( $k, $blocked, true ) ) return true;
+    if ( preg_match( '/^(is_|has_|use_|wc_|woocommerce_|ppcp|mailchimp|yith|wpo_|tefw)/', $k ) ) return true;
+    if ( preg_match( '/(_exempt|_hash|_key|_id)$/', $k ) ) return true;
+
+    // Bare yes/no flags carry no information here.
+    return in_array( $v, array('', '0', '1', 'no', 'yes', 'true', 'false'), true );
+}
+
+/** underscore_key -> "Underscore Key" for display. */
+function btp_exchange_meta_label( $key ) {
+    return ucwords( trim( str_replace( array('_', '-'), ' ', (string) $key ) ) );
+}
+
+/**
  * Order -> payload for the portal table.
  * Line items come back with their formatted meta so whatever the exchange
  * form attached (size wanted, original order, reason) shows up without this
@@ -244,14 +277,16 @@ function btp_exchange_payload( $order ) {
         );
     }
 
-    // Order-level custom fields, minus Woo's own internals.
+    // Order-level custom fields, minus Woo's own internals and the flags other
+    // plugins leave lying around.
     foreach ( $order->get_meta_data() as $m ) {
         $d = $m->get_data();
         $k = isset($d['key']) ? (string) $d['key'] : '';
         if ( $k === '' || $k[0] === '_' ) continue;
         $v = $d['value'];
         if ( ! is_scalar($v) ) continue;
-        $extra[] = array( 'key' => $k, 'value' => trim( wp_strip_all_tags( (string) $v ) ) );
+        if ( btp_exchange_meta_is_noise( $k, $v ) ) continue;
+        $extra[] = array( 'key' => btp_exchange_meta_label( $k ), 'value' => trim( wp_strip_all_tags( (string) $v ) ) );
     }
 
     // Woo joins address lines with <br/>; strip the tags without gluing the
