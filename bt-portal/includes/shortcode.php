@@ -124,6 +124,16 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-chip { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; background:#f2f3f8; border:1px solid #e0e3ee; border-radius:4px; padding:1px 7px; color:#5a6079; }
 #bt-schedule-app .ex-wants { font-size:16px; font-weight:600; color:#1b5e20; }
 #bt-schedule-app .ex-arrow { color:#9ca3b8; font-weight:400; }
+#bt-quote-warn-anchor{display:none}
+.bt-quote-warn { display:flex; gap:12px; align-items:flex-start; background:#fff4e5; border:1.5px solid #f0c78a; border-left:5px solid #d97706; border-radius:8px; padding:14px 16px; margin-bottom:20px; font-family:'Barlow',sans-serif; font-size:16px; line-height:1.5; color:#7a4a00; }
+.bt-quote-warn strong { color:#5c3600; }
+.bt-quote-warn a { color:#1a1f5e; font-weight:600; }
+.bt-toast { position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(12px); z-index:99999; max-width:min(560px,92vw); padding:14px 18px; border-radius:10px; font-family:'Barlow',sans-serif; font-size:16px; line-height:1.45; box-shadow:0 10px 30px rgba(0,0,0,.28); opacity:0; transition:opacity .18s, transform .18s; pointer-events:none; }
+.bt-toast.show { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+.bt-toast.warn { background:#7a1f1f; color:#fff; }
+.bt-toast.good { background:#14532d; color:#fff; }
+.bt-toast a { color:#ffd9d9; font-weight:700; }
+.bt-toast.good a { color:#c9f7d5; }
 #bt-schedule-app .ex-store { font-weight:600; color:#0f1240; font-size:16px; }
 #bt-schedule-app .ex-none { color:#9ca3b8; font-style:italic; font-size:15px; }
 #bt-schedule-app .ex-pair { min-height:26px; margin-bottom:8px; }
@@ -1091,6 +1101,16 @@ add_shortcode( 'bt_schedule', function() {
 <div id="bt-tab-quote" class="tab-content" style="width:100%;box-sizing:border-box;">
   <div style="padding:32px 24px;background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
     <div id="btQuoteTool" style="max-width:900px;margin:0 auto;box-sizing:border-box;">
+      <div class="bt-quote-warn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto;margin-top:1px;"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div>
+          <strong>Don't send a customer the address of this page.</strong>
+          This is the employee portal &mdash; customers can't open it, and the link won't carry the quote.
+          Use <strong>Copy Quote Link</strong> below, which makes a
+          <a href="<?php echo esc_url( home_url('/quote/') ); ?>" target="_blank" rel="noopener">boomerts.com/quote</a>
+          link the customer can actually use.
+        </div>
+      </div>
       <?php
       if ( shortcode_exists( 'bt_quick_quote' ) && defined( 'BTQ_URL' ) ) {
           $btq_html = do_shortcode( '[bt_quick_quote]' );
@@ -1498,6 +1518,53 @@ function btGetLocCount(locStr) {
   if (/^\d+$/.test(locStr.trim())) return parseInt(locStr.trim());
   return 1;
 }
+
+/* ── Toast ──
+   Deliberately not an alert(): a copy is a fast, half-attention action and a
+   modal that has to be dismissed would just get muscle-memoried away. */
+let btToastTimer = null;
+function btToast(html, kind) {
+  let el = document.getElementById('btToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'btToast';
+    document.body.appendChild(el);
+  }
+  el.className = 'bt-toast ' + (kind || 'good');
+  el.innerHTML = html;
+  requestAnimationFrame(() => el.classList.add('show'));
+  clearTimeout(btToastTimer);
+  btToastTimer = setTimeout(() => el.classList.remove('show'), kind === 'warn' ? 9000 : 4500);
+}
+
+/* Copying the portal's own address and sending it to a customer is the easy
+   mistake here — the customer gets a login wall and no quote.
+   This catches a copy of text selected on the page. It CANNOT see a copy made
+   from the browser's address bar; nothing on a page can. The standing notice
+   on the Quote tab is what covers that case. */
+document.addEventListener('copy', function() {
+  let sel = '';
+  try { sel = String(window.getSelection()); } catch (e) { return; }
+  if (!sel) return;
+
+  let portalPath = '';
+  try { portalPath = new URL(BT_ROUTE.base).pathname.replace(/\/+$/, ''); } catch (e) { return; }
+  if (!portalPath || portalPath === '') return;
+  if (sel.indexOf(portalPath) === -1) return;
+
+  const quoteUrl = new URL(BT_ROUTE.base).origin + '/quote/';
+  btToast('<strong>That\'s a link to the employee portal.</strong> Customers can\'t open it and it won\'t carry the quote. ' +
+          'Use <strong>Copy Quote Link</strong> on the Quote tab, or send them <a href="' + quoteUrl +
+          '" target="_blank" rel="noopener">' + quoteUrl.replace(/^https?:\/\//, '') + '</a>.', 'warn');
+});
+
+/* BT Quote's own share button already says "Copied!" — this confirms the
+   thing staff actually need to know, which is who the link works for. */
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest && e.target.closest('#btShareBtn');
+  if (!btn) return;
+  setTimeout(() => btToast('Copied a <strong>customer</strong> link to boomerts.com/quote &mdash; safe to send.', 'good'), 60);
+});
 
 function btSaving(on) {
   const el = document.getElementById('btSavingIndicator');
