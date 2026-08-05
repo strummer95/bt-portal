@@ -134,6 +134,7 @@ add_shortcode( 'bt_schedule', function() {
 .bt-toast.good { background:#14532d; color:#fff; }
 .bt-toast a { color:#ffd9d9; font-weight:700; }
 .bt-toast.good a { color:#c9f7d5; }
+#bt-schedule-app .ex-qty { font-weight:700; color:#b26a00; margin-right:2px; }
 #bt-schedule-app .ex-store { font-weight:600; color:#0f1240; font-size:16px; }
 #bt-schedule-app .ex-none { color:#9ca3b8; font-style:italic; font-size:15px; }
 #bt-schedule-app .ex-pair { min-height:26px; margin-bottom:8px; }
@@ -3534,7 +3535,8 @@ function btRenderExchanges() {
     if (req.parsed && (req.items || []).length) {
       cellFrom = req.items.map(it => {
         const chips = (it.attrs || []).map(a => '<span class="ex-chip">' + btEscHtml(a) + '</span>').join('');
-        return '<div class="ex-pair"><div class="ex-ordered">' + btEscHtml(it.name) + chips + '</div></div>';
+        const qty = (it.qty > 1) ? '<span class="ex-qty">' + it.qty + '&times;</span>' : '';
+        return '<div class="ex-pair"><div class="ex-ordered">' + qty + btEscHtml(it.name) + chips + '</div></div>';
       }).join('');
       cellTo = req.items.map(it => '<div class="ex-pair"><div class="ex-wants">' +
         (it.wants ? btEscHtml(it.wants) : '<span class="ex-none">not specified</span>') + '</div></div>').join('');

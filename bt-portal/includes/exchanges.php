@@ -185,8 +185,27 @@ function btp_parse_exchange_note( $note ) {
         $out['store'] = trim( $m[1], " \t,.-" );
     }
 
-    // Split on "Item N:" so multi-item requests come through as separate rows.
-    if ( preg_match_all( '/Item\s*\d+\s*:\s*(.*?)(?=Item\s*\d+\s*:|$)/is', $note, $chunks ) ) {
+    /* Current note wording, one line per item:
+         2x Performance Shorts, Royal - AM to AS
+       (written with a multiplication sign and an em dash). Only used when the
+       structured meta is missing, e.g. an order placed through a checkout that
+       never ran the form's hooks. */
+    if ( preg_match_all( '/^\s*(\d+)\s*[x\x{00d7}]\s*(.+?),\s*(.*?)\s*[\x{2014}\x{2013}-]\s*(\S+)\s+to\s+(\S+)\s*$/imu', $note, $lines, PREG_SET_ORDER ) ) {
+        foreach ( $lines as $l ) {
+            $attrs = array();
+            if ( trim($l[4]) !== '' ) $attrs[] = trim($l[4]);
+            if ( trim($l[3]) !== '' ) $attrs[] = trim($l[3]);
+            $out['items'][] = array(
+                'name'  => trim($l[2]),
+                'attrs' => $attrs,
+                'qty'   => max( 1, (int) $l[1] ),
+                'wants' => 'Size ' . trim($l[5]),
+            );
+        }
+    }
+
+    // Older wording: split on "Item N:" so multi-item requests separate.
+    if ( empty( $out['items'] ) && preg_match_all( '/Item\s*\d+\s*:\s*(.*?)(?=Item\s*\d+\s*:|$)/is', $note, $chunks ) ) {
         foreach ( $chunks[1] as $chunk ) {
             $chunk = trim( $chunk );
             if ( $chunk === '' ) continue;
@@ -209,6 +228,7 @@ function btp_parse_exchange_note( $note ) {
             $out['items'][] = array(
                 'name'  => (string) $name,
                 'attrs' => $parts,
+                'qty'   => 1,
                 'wants' => $wants,
             );
         }
@@ -249,6 +269,49 @@ function btp_exchange_meta_is_noise( $key, $value ) {
 /** underscore_key -> "Underscore Key" for display. */
 function btp_exchange_meta_label( $key ) {
     return ucwords( trim( str_replace( array('_', '-'), ' ', (string) $key ) ) );
+}
+
+/**
+ * The exchange form stores the request structurally on the order:
+ *   _bt_exchange_request  yes
+ *   _bt_original_order    the customer's original order number
+ *   _bt_school_team       the store they ordered from
+ *   _bt_exchange_items    [ ['ordered'=>['name','size','color'],'want'=>['size'],'qty'=>n], ... ]
+ *
+ * That is the source of truth — exact fields, no guessing. Note parsing stays
+ * as the fallback for orders placed before a given field existed, and for the
+ * older note wording.
+ */
+function btp_exchange_request_from_meta( $order ) {
+    $items = $order->get_meta( '_bt_exchange_items' );
+    if ( ! is_array( $items ) || empty( $items ) ) return null;
+
+    $out = array(
+        'original_order' => (string) $order->get_meta( '_bt_original_order' ),
+        'store'          => (string) $order->get_meta( '_bt_school_team' ),
+        'items'          => array(),
+        'raw'            => '',
+        'parsed'         => true,
+    );
+
+    foreach ( $items as $it ) {
+        $o = isset($it['ordered']) && is_array($it['ordered']) ? $it['ordered'] : array();
+        $w = isset($it['want'])    && is_array($it['want'])    ? $it['want']    : array();
+        $qty = max( 1, (int) ( isset($it['qty']) ? $it['qty'] : 1 ) );
+
+        $attrs = array();
+        if ( ! empty($o['size']) )  $attrs[] = (string) $o['size'];
+        if ( ! empty($o['color']) ) $attrs[] = (string) $o['color'];
+
+        $out['items'][] = array(
+            'name'  => isset($o['name']) ? (string) $o['name'] : '',
+            'attrs' => $attrs,
+            'qty'   => $qty,
+            'wants' => ! empty($w['size']) ? 'Size ' . $w['size'] : '',
+        );
+    }
+
+    return $out;
 }
 
 /**
@@ -304,13 +367,16 @@ function btp_exchange_payload( $order ) {
     $ship     = preg_replace( '/<br\s*\/?>/i', ', ', (string) $ship_raw );
     $ship     = trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $ship ) ), " ,\t\n" );
 
-    $request = btp_parse_exchange_note( $order->get_customer_note() );
+    // Structured meta first; the note is only a fallback.
+    $request = btp_exchange_request_from_meta( $order );
+    if ( ! $request ) $request = btp_parse_exchange_note( $order->get_customer_note() );
 
     /* School/Team can arrive three ways depending on how the form is wired:
        inside the request note, as order meta, or as meta on the shipping line.
        Whichever exists wins, in that order, so the portal keeps working
        through a change to the form rather than needing a release to match. */
-    $store = $request['store'];
+    $store = (string) $order->get_meta( '_bt_school_team' );
+    if ( $store === '' ) $store = $request['store'];
     if ( $store === '' ) {
         foreach ( $extra as $m ) {
             if ( preg_match( '/(school|team|store|organization|group)/i', $m['key'] ) && $m['value'] !== '' ) {
