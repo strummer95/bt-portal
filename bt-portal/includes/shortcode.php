@@ -136,8 +136,9 @@ add_shortcode( 'bt_schedule', function() {
 .bt-toast.good a { color:#c9f7d5; }
 #bt-schedule-app .ex-qty { font-weight:700; color:#b26a00; }
 #bt-schedule-app .ex-table td.ex-c { text-align:center; white-space:nowrap; }
-/* The five item columns read as one block: tinted, and ruled off from the
-   customer details on the left and the workflow controls on the right. */
+/* School/Team through New Size read as one block — everything about what is
+   being exchanged — ruled off from who the customer is on the left and the
+   workflow controls on the right. */
 #bt-schedule-app .ex-table td.ex-g { background:#f7f8fd; }
 #bt-schedule-app .ex-table tr:hover td.ex-g { background:#eef0fa; }
 #bt-schedule-app .ex-table th.ex-g1, #bt-schedule-app .ex-table td.ex-g1 { border-left:2px solid #c9cee4; }
@@ -1088,8 +1089,8 @@ add_shortcode( 'bt_schedule', function() {
           <tr>
             <th style="width:130px;">Order</th>
             <th>Customer</th>
-            <th style="width:150px;">School / Team</th>
-            <th class="ex-g ex-g1" style="width:250px;">Product</th>
+            <th class="ex-g ex-g1" style="width:160px;">School / Team</th>
+            <th class="ex-g" style="width:250px;">Product</th>
             <th class="ex-g" style="width:70px;">Size</th>
             <th class="ex-g" style="width:100px;">Color</th>
             <th class="ex-g" style="width:55px;">Qty</th>
@@ -3616,8 +3617,8 @@ function btRenderExchanges() {
         '<a href="mailto:' + btEscHtml(x.email) + '" style="color:#1a1f5e;font-size:14px;">' + btEscHtml(x.email) + '</a>' +
         '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.phone) + '</div>' +
         '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.address) + '</div></td>' +
-      '<td>' + store + '</td>' +
-      '<td class="ex-g ex-g1">' + items + cProduct + '</td>' +
+      '<td class="ex-g ex-g1">' + store + '</td>' +
+      '<td class="ex-g">' + items + cProduct + '</td>' +
       '<td class="ex-c ex-g">' + cSize + '</td>' +
       '<td class="ex-c ex-g">' + cColor + '</td>' +
       '<td class="ex-c ex-g">' + cQty + '</td>' +
