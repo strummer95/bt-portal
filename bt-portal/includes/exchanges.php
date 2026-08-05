@@ -198,6 +198,10 @@ function btp_exchange_payload( $order ) {
         // this from Woo every load rather than storing it, so reinstating the
         // order in wp-admin puts it straight back in the queue.
         'cancelled'     => in_array( $order->get_status(), array('cancelled', 'refunded', 'failed'), true ),
+        // Not paid for yet, so not a live exchange either — nobody should be
+        // expecting a box for an order that never went through. Derived from
+        // Woo each load, so it clears itself the moment payment lands.
+        'unpaid'        => in_array( $order->get_status(), array('pending', 'on-hold'), true ),
         'total'         => (float) $order->get_total(),
         'customer'      => trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
         'email'         => $order->get_billing_email(),

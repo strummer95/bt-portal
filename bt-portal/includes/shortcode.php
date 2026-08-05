@@ -102,6 +102,7 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-pill.received { background:#e3f2fd; color:#0d47a1; }
 #bt-schedule-app .ex-pill.shipped  { background:#e8f5e9; color:#1b5e20; }
 #bt-schedule-app .ex-pill.cancelled { background:#fdecea; color:#8c1d18; }
+#bt-schedule-app .ex-pill.unpaid { background:#fff3e0; color:#8a4b00; border:1px solid #f0c78a; }
 #bt-schedule-app .ex-action { background:#f2f3f8; border:1.5px solid #d8dbe6; border-radius:6px; padding:5px 10px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#5a6079; cursor:pointer; white-space:nowrap; transition:all .15s; }
 #bt-schedule-app .ex-action:hover { border-color:#0f1240; color:#0f1240; }
 #bt-schedule-app .ex-select { font-family:'Barlow',sans-serif; font-size:15px; padding:6px 8px; border:1.5px solid #d8dbe6; border-radius:6px; background:#fff; color:#0f1240; cursor:pointer; }
@@ -3340,25 +3341,29 @@ function btSetExFilter(f) { btExFilter = f; btRenderExchanges(); }
 
 /* Which pile a row belongs in. Hidden wins over everything; a cancelled or
    refunded order is not work in progress whatever its stored status says, so
-   it never sits in Awaiting waiting on a box that isn't coming. */
+   it never sits in Awaiting waiting on a box that isn't coming. An unpaid
+   order isn't a live exchange yet either — it rejoins the queue on its own
+   the moment Woo says it's paid. */
 function btExBucket(x) {
   if (x.hidden) return 'hidden';
   if (x.cancelled) return 'cancelled';
+  if (x.unpaid) return 'unpaid';
   return x.status;
 }
 
 function btRenderExchanges() {
   const statuses = btExData.statuses || {};
   const all = btExData.exchanges || [];
-  const labels = Object.assign({ cancelled: 'Cancelled', hidden: 'Hidden' }, statuses);
+  const labels = Object.assign({ unpaid: 'Unpaid', cancelled: 'Cancelled', hidden: 'Hidden' }, statuses);
 
   const live = all.filter(x => !x.hidden);
   const counts = { all: live.length };
   Object.keys(statuses).forEach(k => counts[k] = all.filter(x => btExBucket(x) === k).length);
+  counts.unpaid    = all.filter(x => btExBucket(x) === 'unpaid').length;
   counts.cancelled = all.filter(x => btExBucket(x) === 'cancelled').length;
   counts.hidden    = all.filter(x => x.hidden).length;
 
-  const order = ['all'].concat(Object.keys(statuses), ['cancelled', 'hidden']);
+  const order = ['all'].concat(Object.keys(statuses), ['unpaid', 'cancelled', 'hidden']);
   document.getElementById('btExFilters').innerHTML = order.map(k => {
     const label = k === 'all' ? 'All' : labels[k];
     return '<button class="ex-filter' + (btExFilter === k ? ' active' : '') + '" onclick="btSetExFilter(\'' + k + '\')">' +
@@ -3376,7 +3381,7 @@ function btRenderExchanges() {
 
   tbody.innerHTML = rows.map(x => {
     const bucket = btExBucket(x);
-    const dim = (bucket === 'cancelled' || bucket === 'hidden') ? 'opacity:.55;' : '';
+    const dim = (bucket === 'awaiting' || bucket === 'received' || bucket === 'shipped') ? '' : 'opacity:.55;';
 
     const d = new Date((x.date || '').replace(' ', 'T'));
     const dateStr = isNaN(d) ? '' : d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
@@ -3398,10 +3403,11 @@ function btRenderExchanges() {
         btEscHtml((x.updated_at || '').slice(5, 10)) + '</div>'
       : '';
 
-    // A cancelled order gets a pill, not a dropdown — there is no exchange to
-    // move through the shop, and staff shouldn't be able to march it forward.
-    const statusCell = x.cancelled
-      ? '<span class="ex-pill cancelled">' + btEscHtml(x.woo_status_lbl) + '</span>'
+    // Cancelled or unpaid gets a pill reading Woo's own wording, not a
+    // dropdown: there is nothing to move through the shop yet, and nobody
+    // should be able to march it forward to Shipped.
+    const statusCell = (x.cancelled || x.unpaid)
+      ? '<span class="ex-pill ' + (x.cancelled ? 'cancelled' : 'unpaid') + '">' + btEscHtml(x.woo_status_lbl) + '</span>'
       : '<select class="ex-select" onchange="btSaveExchange(' + x.order_id + ', {status:this.value})">' +
           Object.keys(statuses).map(k =>
             '<option value="' + k + '"' + (x.status === k ? ' selected' : '') + '>' + btEscHtml(statuses[k]) + '</option>'
