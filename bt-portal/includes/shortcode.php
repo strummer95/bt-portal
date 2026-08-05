@@ -104,7 +104,7 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-filter { padding:5px 14px; border-radius:20px; border:1.5px solid #d8dbe6; background:#fff; color:#5a6079; font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
 #bt-schedule-app .ex-filter:hover { border-color:#0f1240; color:#0f1240; }
 #bt-schedule-app .ex-filter.active { background:#0f1240; border-color:#0f1240; color:#fff; }
-#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1320px; }
+#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1500px; }
 #bt-schedule-app .ex-table th { padding:10px 12px; text-align:left; background:#0f1240; color:#fff; font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.07em; text-transform:uppercase; font-size:15px; white-space:nowrap; }
 #bt-schedule-app .ex-table td { padding:12px; border-bottom:1px solid #e8eaf0; color:#0f1240; vertical-align:top; }
 #bt-schedule-app .ex-table tr:hover td { background:#f7f8fc; }
@@ -134,7 +134,9 @@ add_shortcode( 'bt_schedule', function() {
 .bt-toast.good { background:#14532d; color:#fff; }
 .bt-toast a { color:#ffd9d9; font-weight:700; }
 .bt-toast.good a { color:#c9f7d5; }
-#bt-schedule-app .ex-qty { font-weight:700; color:#b26a00; margin-right:2px; }
+#bt-schedule-app .ex-qty { font-weight:700; color:#b26a00; }
+#bt-schedule-app .ex-table td.ex-c { text-align:center; white-space:nowrap; }
+#bt-schedule-app .ex-table td.ex-c .ex-wants { color:#1b5e20; font-weight:700; }
 #bt-schedule-app .ex-store { font-weight:600; color:#0f1240; font-size:16px; }
 #bt-schedule-app .ex-none { color:#9ca3b8; font-style:italic; font-size:15px; }
 #bt-schedule-app .ex-pair { min-height:26px; margin-bottom:8px; }
@@ -1081,8 +1083,11 @@ add_shortcode( 'bt_schedule', function() {
             <th style="width:130px;">Order</th>
             <th style="width:180px;">Customer</th>
             <th style="width:150px;">School / Team</th>
-            <th>Exchanging</th>
-            <th>For</th>
+            <th>Product</th>
+            <th style="width:70px;">Size</th>
+            <th style="width:110px;">Color</th>
+            <th style="width:55px;">Qty</th>
+            <th style="width:95px;">New Size</th>
             <th style="width:140px;">Status</th>
             <th style="width:150px;">Return Tracking</th>
             <th style="width:170px;">Notes</th>
@@ -1090,7 +1095,7 @@ add_shortcode( 'bt_schedule', function() {
           </tr>
         </thead>
         <tbody id="btExBody">
-          <tr><td colspan="9" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
+          <tr><td colspan="12" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -3467,13 +3472,13 @@ function btEscHtml(s) {
 
 async function btLoadExchanges() {
   const tbody = document.getElementById('btExBody');
-  tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
   try {
     btExData = await btFetch('/exchanges');
     btRenderExchanges();
   } catch(e) {
     const expired = String(e.message||'').indexOf('403') !== -1;
-    tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:#b71c1c;">' +
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#b71c1c;">' +
       (expired ? 'Session expired — reload the page.' : 'Error loading exchanges.') + '</td></tr>';
   }
 }
@@ -3515,7 +3520,7 @@ function btRenderExchanges() {
   const tbody = document.getElementById('btExBody');
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
       (all.length ? 'Nothing in this status.' : 'No exchange orders yet.') + '</td></tr>';
     return;
   }
@@ -3530,27 +3535,36 @@ function btRenderExchanges() {
     // "Exchanging X for Y" reads as two columns so the eye can run down what
     // came in and what goes out. The pairs are rendered in lockstep, one block
     // per item, so a multi-item request stays aligned across both cells.
+    /* One row per exchange, but a request can hold up to three items. Rather
+       than splitting into extra table rows — which would break the rowspan of
+       Status, Tracking and Notes — each of the five item columns stacks its
+       values in the same order, so line 2 of Product lines up with line 2 of
+       Size, Color, Qty and New Size. */
     const req = x.request || {};
-    let cellFrom, cellTo;
+    const dash = '<span class="ex-none">&mdash;</span>';
+    let cProduct, cSize, cColor, cQty, cNew;
+
     if (req.parsed && (req.items || []).length) {
-      cellFrom = req.items.map(it => {
-        const chips = (it.attrs || []).map(a => '<span class="ex-chip">' + btEscHtml(a) + '</span>').join('');
-        const qty = (it.qty > 1) ? '<span class="ex-qty">' + it.qty + '&times;</span>' : '';
-        return '<div class="ex-pair"><div class="ex-ordered">' + qty + btEscHtml(it.name) + chips + '</div></div>';
-      }).join('');
-      cellTo = req.items.map(it => '<div class="ex-pair"><div class="ex-wants">' +
-        (it.wants ? btEscHtml(it.wants) : '<span class="ex-none">not specified</span>') + '</div></div>').join('');
-    } else if (x.customer_note) {
-      cellFrom = '<div class="ex-raw">' + btEscHtml(x.customer_note) + '</div>';
-      cellTo   = '<span class="ex-none">&mdash;</span>';
-    } else if ((x.extra || []).length) {
-      cellFrom = x.extra.map(m => '<div class="ex-orig">' + btEscHtml(m.key) +
-        ': <strong>' + btEscHtml(m.value) + '</strong></div>').join('');
-      cellTo   = '<span class="ex-none">&mdash;</span>';
+      const stack = (fn, cls) => req.items.map(it =>
+        '<div class="ex-pair ' + (cls || '') + '">' + (fn(it) || dash) + '</div>').join('');
+      cProduct = stack(it => btEscHtml(it.name), 'ex-ordered');
+      cSize    = stack(it => btEscHtml(it.size));
+      cColor   = stack(it => btEscHtml(it.color));
+      cQty     = stack(it => (it.qty > 1 ? '<span class="ex-qty">' + it.qty + '</span>' : String(it.qty || 1)));
+      cNew     = stack(it => btEscHtml(it.want), 'ex-wants');
     } else {
-      cellFrom = '<span class="ex-none">No exchange details &mdash; ' +
-                 '<a href="' + btEscHtml(x.edit_url) + '" target="_blank" rel="noopener" style="color:#1a1f5e;">open in Woo</a></span>';
-      cellTo   = '<span class="ex-none">&mdash;</span>';
+      // Nothing structured to lay out — say what there is in the Product cell
+      // and dash the rest, rather than faking columns out of prose.
+      cSize = cColor = cQty = cNew = dash;
+      if (x.customer_note) {
+        cProduct = '<div class="ex-raw">' + btEscHtml(x.customer_note) + '</div>';
+      } else if ((x.extra || []).length) {
+        cProduct = x.extra.map(m => '<div class="ex-orig">' + btEscHtml(m.key) +
+          ': <strong>' + btEscHtml(m.value) + '</strong></div>').join('');
+      } else {
+        cProduct = '<span class="ex-none">No exchange details &mdash; ' +
+                   '<a href="' + btEscHtml(x.edit_url) + '" target="_blank" rel="noopener" style="color:#1a1f5e;">open in Woo</a></span>';
+      }
     }
 
     // Line items that aren't the shipping product, if the order ever has any.
@@ -3597,8 +3611,11 @@ function btRenderExchanges() {
         '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.phone) + '</div>' +
         '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.address) + '</div></td>' +
       '<td>' + store + '</td>' +
-      '<td>' + items + cellFrom + '</td>' +
-      '<td>' + cellTo + '</td>' +
+      '<td>' + items + cProduct + '</td>' +
+      '<td class="ex-c">' + cSize + '</td>' +
+      '<td class="ex-c">' + cColor + '</td>' +
+      '<td class="ex-c">' + cQty + '</td>' +
+      '<td class="ex-c">' + cNew + '</td>' +
       '<td>' + statusCell + updated + '</td>' +
       '<td><input class="ex-input" value="' + btEscHtml(x.tracking) + '" placeholder="Tracking #" ' +
         'onchange="btSaveExchange(' + x.order_id + ', {tracking:this.value})"></td>' +

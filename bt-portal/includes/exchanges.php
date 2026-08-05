@@ -192,14 +192,12 @@ function btp_parse_exchange_note( $note ) {
        never ran the form's hooks. */
     if ( preg_match_all( '/^\s*(\d+)\s*[x\x{00d7}]\s*(.+?),\s*(.*?)\s*[\x{2014}\x{2013}-]\s*(\S+)\s+to\s+(\S+)\s*$/imu', $note, $lines, PREG_SET_ORDER ) ) {
         foreach ( $lines as $l ) {
-            $attrs = array();
-            if ( trim($l[4]) !== '' ) $attrs[] = trim($l[4]);
-            if ( trim($l[3]) !== '' ) $attrs[] = trim($l[3]);
             $out['items'][] = array(
                 'name'  => trim($l[2]),
-                'attrs' => $attrs,
+                'size'  => trim($l[4]),
+                'color' => trim($l[3]),
                 'qty'   => max( 1, (int) $l[1] ),
-                'wants' => 'Size ' . trim($l[5]),
+                'want'  => trim($l[5]),
             );
         }
     }
@@ -221,15 +219,20 @@ function btp_parse_exchange_note( $note ) {
                 $ordered = $chunk;
             }
 
-            // "Performance Shorts (TT11SHY) | AM | Royal" -> name + attributes
+            // "Performance Shorts (TT11SHY) | AM | Royal" -> product | size | color
             $parts = array_values( array_filter( array_map( 'trim', explode( '|', $ordered ) ), 'strlen' ) );
             $name  = array_shift( $parts );
 
+            // "New size AS (same product & color)" -> AS
+            $want_size = $wants;
+            if ( preg_match( '/New size\s+(\S+)/i', $wants, $ws ) ) $want_size = trim( $ws[1], " .,()" );
+
             $out['items'][] = array(
                 'name'  => (string) $name,
-                'attrs' => $parts,
+                'size'  => isset($parts[0]) ? $parts[0] : '',
+                'color' => isset($parts[1]) ? $parts[1] : '',
                 'qty'   => 1,
-                'wants' => $wants,
+                'want'  => $want_size,
             );
         }
     }
@@ -299,15 +302,12 @@ function btp_exchange_request_from_meta( $order ) {
         $w = isset($it['want'])    && is_array($it['want'])    ? $it['want']    : array();
         $qty = max( 1, (int) ( isset($it['qty']) ? $it['qty'] : 1 ) );
 
-        $attrs = array();
-        if ( ! empty($o['size']) )  $attrs[] = (string) $o['size'];
-        if ( ! empty($o['color']) ) $attrs[] = (string) $o['color'];
-
         $out['items'][] = array(
-            'name'  => isset($o['name']) ? (string) $o['name'] : '',
-            'attrs' => $attrs,
+            'name'  => isset($o['name'])  ? (string) $o['name']  : '',
+            'size'  => isset($o['size'])  ? (string) $o['size']  : '',
+            'color' => isset($o['color']) ? (string) $o['color'] : '',
             'qty'   => $qty,
-            'wants' => ! empty($w['size']) ? 'Size ' . $w['size'] : '',
+            'want'  => isset($w['size'])  ? (string) $w['size']  : '',
         );
     }
 
