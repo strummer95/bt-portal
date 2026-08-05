@@ -3696,6 +3696,14 @@ async function btSaveExchange(orderId, patch) {
     }, patch));
     Object.assign(row, saved);
     btRenderExchanges();
+    // Staff should never be surprised that the customer got mail.
+    if (saved.emailed === 'received') {
+      btToast('Emailed the customer that we received their items.', 'good');
+    } else if (saved.emailed === 'shipped' || saved.emailed === 'shipped-tracking') {
+      btToast(row.tracking
+        ? 'Emailed the customer that it shipped, with tracking <strong>' + btEscHtml(row.tracking) + '</strong>.'
+        : 'Emailed the customer that it shipped. Add a tracking number and they\'ll get it automatically.', 'good');
+    }
   } catch(e) {
     alert('Could not save the exchange. ' + (String(e.message||'').indexOf('403') !== -1 ? 'Reload the page and try again.' : ''));
   } finally {

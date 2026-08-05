@@ -512,20 +512,35 @@ function btp_update_exchange( $request ) {
         $order_id, $status, $tracking, $notes, $hidden, $user, $now, $now
     ) );
 
-    // Leave a trail on the order itself, but only when the state actually moved.
-    if ( $status !== $current['status'] && function_exists('wc_get_order') ) {
+    $emailed = '';
+    if ( function_exists('wc_get_order') ) {
         $order = wc_get_order( $order_id );
         if ( $order ) {
-            $labels = btp_exchange_statuses();
-            $note   = 'Exchange marked ' . $labels[$status];
-            if ( $status === 'shipped' && $tracking !== '' ) $note .= ' (tracking ' . $tracking . ')';
-            if ( $user !== '' ) $note .= ' by ' . $user;
-            $order->add_order_note( $note . ' from the BT Portal.' );
+            // Leave a trail, but only when the state actually moved.
+            if ( $status !== $current['status'] ) {
+                $labels = btp_exchange_statuses();
+                $note   = 'Exchange marked ' . $labels[$status];
+                if ( $status === 'shipped' && $tracking !== '' ) $note .= ' (tracking ' . $tracking . ')';
+                if ( $user !== '' ) $note .= ' by ' . $user;
+                $order->add_order_note( $note . ' from the BT Portal.' );
+            }
+
+            /* Tell the customer. Runs on every save, not just status changes,
+               because adding a tracking number after the fact is exactly when
+               the follow-up is owed. The decision function is what stops it
+               repeating — hidden rows are skipped entirely, since those are
+               tests and mistakes. */
+            if ( ! $hidden ) {
+                $kind = btp_exchange_mail_decision( $order, $status, $tracking, $current['status'] );
+                if ( $kind && btp_exchange_send_status_email( $order, $kind, $tracking ) ) {
+                    $emailed = $kind;
+                }
+            }
         }
     }
 
     return rest_ensure_response( array_merge(
-        array('order_id' => $order_id),
+        array('order_id' => $order_id, 'emailed' => $emailed),
         btp_exchange_row( $order_id )
     ) );
 }
