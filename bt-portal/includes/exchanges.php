@@ -43,6 +43,35 @@ add_action('init', function() {
     update_option('btp_exchanges_migrated_v1', '1');
 });
 
+/* Hidden flag — test orders and mistakes get tucked away rather than deleted,
+   so nothing is ever actually lost and staff can hide the next one without a
+   plugin release. */
+add_action('init', function() {
+    if ( get_option('btp_exchanges_migrated_v2') ) return;
+    global $wpdb;
+    $t = $wpdb->prefix . 'bt_exchanges';
+
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM $t", 0);
+    if ( ! is_array($cols) || empty($cols) ) return; // table not built yet; retry next load
+    if ( ! in_array('hidden', $cols) )
+        $wpdb->query("ALTER TABLE $t ADD COLUMN hidden tinyint(1) NOT NULL DEFAULT 0");
+
+    update_option('btp_exchanges_migrated_v2', '1');
+});
+
+/**
+ * Orders Dillon identified as tests on 2026-08-05. Hidden once, on the first
+ * load after this update, then the seed switches itself off — so un-hiding one
+ * in the portal sticks and this list never fights him.
+ *
+ * Matched on order number AND order id, because a sequential-order-number
+ * plugin can make those two different and the numbers above are what the
+ * portal displayed.
+ */
+function btp_exchange_seed_hidden() {
+    return array('4980', '4457', '4456', '4455', '4454', '4453', '4452');
+}
+
 /* ============================================================
  * 2. CONFIG
  * ============================================================ */
@@ -109,6 +138,7 @@ function btp_exchange_row( $order_id ) {
             'status'     => 'awaiting',
             'tracking'   => '',
             'notes'      => '',
+            'hidden'     => 0,
             'updated_by' => '',
             'updated_at' => '',
         );
@@ -117,6 +147,7 @@ function btp_exchange_row( $order_id ) {
         'status'     => $row['status'],
         'tracking'   => $row['tracking'],
         'notes'      => (string) $row['notes'],
+        'hidden'     => isset($row['hidden']) ? (int) $row['hidden'] : 0,
         'updated_by' => $row['updated_by'],
         'updated_at' => $row['updated_at'] ? $row['updated_at'] : '',
     );
@@ -162,6 +193,11 @@ function btp_exchange_payload( $order ) {
         'date'          => $order->get_date_created() ? $order->get_date_created()->date('Y-m-d H:i:s') : '',
         'woo_status'    => $order->get_status(),
         'woo_status_lbl'=> wc_get_order_status_name( $order->get_status() ),
+        // An order that was cancelled, refunded or failed is not work in
+        // progress — nobody is waiting on a box for it. The portal derives
+        // this from Woo every load rather than storing it, so reinstating the
+        // order in wp-admin puts it straight back in the queue.
+        'cancelled'     => in_array( $order->get_status(), array('cancelled', 'refunded', 'failed'), true ),
         'total'         => (float) $order->get_total(),
         'customer'      => trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
         'email'         => $order->get_billing_email(),
@@ -200,13 +236,32 @@ function btp_get_exchanges( $request ) {
     $limit = (int) $request->get_param('limit');
     if ( $limit <= 0 ) $limit = 100;
 
+    global $wpdb;
+    $seeding = ! get_option('btp_exchanges_seeded_hidden_v1');
+    $seed    = $seeding ? btp_exchange_seed_hidden() : array();
+
     $out = array();
     foreach ( btp_exchange_order_ids( $limit ) as $oid ) {
         $order = wc_get_order( (int) $oid );
         if ( ! $order ) continue;
         if ( in_array( $order->get_status(), array('trash', 'checkout-draft'), true ) ) continue;
-        $out[] = array_merge( btp_exchange_payload( $order ), btp_exchange_row( (int) $oid ) );
+
+        $oid = (int) $oid;
+
+        if ( $seeding && ( in_array( (string) $order->get_order_number(), $seed, true )
+                        || in_array( (string) $oid, $seed, true ) ) ) {
+            $wpdb->query( $wpdb->prepare(
+                "INSERT INTO {$wpdb->prefix}bt_exchanges (order_id, status, hidden, updated_by, updated_at, created_at)
+                 VALUES (%d, 'awaiting', 1, 'system', %s, %s)
+                 ON DUPLICATE KEY UPDATE hidden = 1",
+                $oid, current_time('mysql'), current_time('mysql')
+            ) );
+        }
+
+        $out[] = array_merge( btp_exchange_payload( $order ), btp_exchange_row( $oid ) );
     }
+
+    if ( $seeding ) update_option('btp_exchanges_seeded_hidden_v1', '1');
 
     return rest_ensure_response( array(
         'product_id' => btp_exchange_product_id(),
@@ -233,20 +288,22 @@ function btp_update_exchange( $request ) {
 
     $tracking = isset($body['tracking']) ? sanitize_text_field($body['tracking']) : $current['tracking'];
     $notes    = isset($body['notes'])    ? sanitize_textarea_field($body['notes']) : $current['notes'];
+    $hidden   = isset($body['hidden'])   ? ( $body['hidden'] ? 1 : 0 ) : (int) $current['hidden'];
     $user     = isset($body['user_name'])? sanitize_text_field($body['user_name']) : '';
     $now      = current_time('mysql');
 
     $t = $wpdb->prefix . 'bt_exchanges';
     $wpdb->query( $wpdb->prepare(
-        "INSERT INTO $t (order_id, status, tracking, notes, updated_by, updated_at, created_at)
-         VALUES (%d, %s, %s, %s, %s, %s, %s)
+        "INSERT INTO $t (order_id, status, tracking, notes, hidden, updated_by, updated_at, created_at)
+         VALUES (%d, %s, %s, %s, %d, %s, %s, %s)
          ON DUPLICATE KEY UPDATE
             status = VALUES(status),
             tracking = VALUES(tracking),
             notes = VALUES(notes),
+            hidden = VALUES(hidden),
             updated_by = VALUES(updated_by),
             updated_at = VALUES(updated_at)",
-        $order_id, $status, $tracking, $notes, $user, $now, $now
+        $order_id, $status, $tracking, $notes, $hidden, $user, $now, $now
     ) );
 
     // Leave a trail on the order itself, but only when the state actually moved.

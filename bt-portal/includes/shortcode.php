@@ -101,6 +101,9 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-pill.awaiting { background:#fff3e0; color:#b26a00; }
 #bt-schedule-app .ex-pill.received { background:#e3f2fd; color:#0d47a1; }
 #bt-schedule-app .ex-pill.shipped  { background:#e8f5e9; color:#1b5e20; }
+#bt-schedule-app .ex-pill.cancelled { background:#fdecea; color:#8c1d18; }
+#bt-schedule-app .ex-action { background:#f2f3f8; border:1.5px solid #d8dbe6; border-radius:6px; padding:5px 10px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#5a6079; cursor:pointer; white-space:nowrap; transition:all .15s; }
+#bt-schedule-app .ex-action:hover { border-color:#0f1240; color:#0f1240; }
 #bt-schedule-app .ex-select { font-family:'Barlow',sans-serif; font-size:15px; padding:6px 8px; border:1.5px solid #d8dbe6; border-radius:6px; background:#fff; color:#0f1240; cursor:pointer; }
 #bt-schedule-app .ex-input { font-family:'Barlow',sans-serif; font-size:15px; padding:6px 8px; border:1.5px solid #d8dbe6; border-radius:6px; width:100%; box-sizing:border-box; color:#0f1240; }
 #bt-schedule-app .ex-input:focus, #bt-schedule-app .ex-select:focus { outline:none; border-color:var(--pink); }
@@ -1045,10 +1048,11 @@ add_shortcode( 'bt_schedule', function() {
             <th style="width:150px;">Status</th>
             <th style="width:160px;">Return Tracking</th>
             <th style="width:200px;">Notes</th>
+            <th style="width:70px;"></th>
           </tr>
         </thead>
         <tbody id="btExBody">
-          <tr><td colspan="6" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
+          <tr><td colspan="7" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -3301,43 +3305,59 @@ function btEscHtml(s) {
 
 async function btLoadExchanges() {
   const tbody = document.getElementById('btExBody');
-  tbody.innerHTML = '<tr><td colspan="6" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
   try {
     btExData = await btFetch('/exchanges');
     btRenderExchanges();
   } catch(e) {
     const expired = String(e.message||'').indexOf('403') !== -1;
-    tbody.innerHTML = '<tr><td colspan="6" style="padding:40px;text-align:center;color:#b71c1c;">' +
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:40px;text-align:center;color:#b71c1c;">' +
       (expired ? 'Session expired — reload the page.' : 'Error loading exchanges.') + '</td></tr>';
   }
 }
 
 function btSetExFilter(f) { btExFilter = f; btRenderExchanges(); }
 
+/* Which pile a row belongs in. Hidden wins over everything; a cancelled or
+   refunded order is not work in progress whatever its stored status says, so
+   it never sits in Awaiting waiting on a box that isn't coming. */
+function btExBucket(x) {
+  if (x.hidden) return 'hidden';
+  if (x.cancelled) return 'cancelled';
+  return x.status;
+}
+
 function btRenderExchanges() {
   const statuses = btExData.statuses || {};
   const all = btExData.exchanges || [];
+  const labels = Object.assign({ cancelled: 'Cancelled', hidden: 'Hidden' }, statuses);
 
-  const counts = { all: all.length };
-  Object.keys(statuses).forEach(k => counts[k] = all.filter(x => x.status === k).length);
+  const live = all.filter(x => !x.hidden);
+  const counts = { all: live.length };
+  Object.keys(statuses).forEach(k => counts[k] = all.filter(x => btExBucket(x) === k).length);
+  counts.cancelled = all.filter(x => btExBucket(x) === 'cancelled').length;
+  counts.hidden    = all.filter(x => x.hidden).length;
 
-  document.getElementById('btExFilters').innerHTML =
-    ['all'].concat(Object.keys(statuses)).map(k => {
-      const label = k === 'all' ? 'All' : statuses[k];
-      return '<button class="ex-filter' + (btExFilter === k ? ' active' : '') + '" onclick="btSetExFilter(\'' + k + '\')">' +
-             btEscHtml(label) + ' (' + (counts[k] || 0) + ')</button>';
-    }).join('');
+  const order = ['all'].concat(Object.keys(statuses), ['cancelled', 'hidden']);
+  document.getElementById('btExFilters').innerHTML = order.map(k => {
+    const label = k === 'all' ? 'All' : labels[k];
+    return '<button class="ex-filter' + (btExFilter === k ? ' active' : '') + '" onclick="btSetExFilter(\'' + k + '\')">' +
+           btEscHtml(label) + ' (' + (counts[k] || 0) + ')</button>';
+  }).join('');
 
-  const rows = btExFilter === 'all' ? all : all.filter(x => x.status === btExFilter);
+  const rows = btExFilter === 'all' ? live : all.filter(x => btExBucket(x) === btExFilter);
   const tbody = document.getElementById('btExBody');
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
       (all.length ? 'Nothing in this status.' : 'No exchange orders yet.') + '</td></tr>';
     return;
   }
 
   tbody.innerHTML = rows.map(x => {
+    const bucket = btExBucket(x);
+    const dim = (bucket === 'cancelled' || bucket === 'hidden') ? 'opacity:.55;' : '';
+
     const d = new Date((x.date || '').replace(' ', 'T'));
     const dateStr = isNaN(d) ? '' : d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
 
@@ -3358,11 +3378,20 @@ function btRenderExchanges() {
         btEscHtml((x.updated_at || '').slice(5, 10)) + '</div>'
       : '';
 
-    const opts = Object.keys(statuses).map(k =>
-      '<option value="' + k + '"' + (x.status === k ? ' selected' : '') + '>' + btEscHtml(statuses[k]) + '</option>'
-    ).join('');
+    // A cancelled order gets a pill, not a dropdown — there is no exchange to
+    // move through the shop, and staff shouldn't be able to march it forward.
+    const statusCell = x.cancelled
+      ? '<span class="ex-pill cancelled">' + btEscHtml(x.woo_status_lbl) + '</span>'
+      : '<select class="ex-select" onchange="btSaveExchange(' + x.order_id + ', {status:this.value})">' +
+          Object.keys(statuses).map(k =>
+            '<option value="' + k + '"' + (x.status === k ? ' selected' : '') + '>' + btEscHtml(statuses[k]) + '</option>'
+          ).join('') + '</select>';
 
-    return '<tr>' +
+    const action = x.hidden
+      ? '<button class="ex-action" onclick="btSaveExchange(' + x.order_id + ', {hidden:0})">Restore</button>'
+      : '<button class="ex-action" onclick="btSaveExchange(' + x.order_id + ', {hidden:1})" title="Hide from the list — nothing is deleted">Hide</button>';
+
+    return '<tr style="' + dim + '">' +
       '<td><a href="' + btEscHtml(x.edit_url) + '" target="_blank" rel="noopener" style="color:#1a1f5e;font-weight:700;">#' + btEscHtml(x.number) + '</a>' +
         '<div style="font-size:14px;color:#9ca3b8;">' + dateStr + '</div>' +
         '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.woo_status_lbl) + '</div></td>' +
@@ -3371,11 +3400,12 @@ function btRenderExchanges() {
         '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.phone) + '</div>' +
         '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.address) + '</div></td>' +
       '<td>' + items + note + '</td>' +
-      '<td><select class="ex-select" onchange="btSaveExchange(' + x.order_id + ', {status:this.value})">' + opts + '</select>' + updated + '</td>' +
+      '<td>' + statusCell + updated + '</td>' +
       '<td><input class="ex-input" value="' + btEscHtml(x.tracking) + '" placeholder="Tracking #" ' +
         'onchange="btSaveExchange(' + x.order_id + ', {tracking:this.value})"></td>' +
       '<td><input class="ex-input" value="' + btEscHtml(x.notes) + '" placeholder="Notes" ' +
         'onchange="btSaveExchange(' + x.order_id + ', {notes:this.value})"></td>' +
+      '<td>' + action + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -3386,7 +3416,7 @@ async function btSaveExchange(orderId, patch) {
   btSaving(true);
   try {
     const saved = await btFetch('/exchanges/' + orderId, 'POST', Object.assign({
-      status: row.status, tracking: row.tracking, notes: row.notes, user_name: btUserName
+      status: row.status, tracking: row.tracking, notes: row.notes, hidden: row.hidden, user_name: btUserName
     }, patch));
     Object.assign(row, saved);
     btRenderExchanges();
