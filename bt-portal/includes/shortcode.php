@@ -3689,6 +3689,16 @@ function btRenderExchanges() {
 async function btSaveExchange(orderId, patch) {
   const row = (btExData.exchanges || []).find(x => x.order_id === orderId);
   if (!row) return;
+
+  /* Marking Shipped mails the customer immediately, so an empty tracking box
+     is worth one question — they would otherwise get a parcel notice with no
+     number in it. Declining re-renders, which puts the dropdown back where it
+     was rather than leaving it showing a status that was never saved. */
+  if (patch.status === 'shipped' && !String(row.tracking || '').trim()) {
+    const go = confirm('No Tracking Number Entered.\n\nAre you sure you want to mark this order as shipped and notify the customer?');
+    if (!go) { btRenderExchanges(); return; }
+  }
+
   btSaving(true);
   try {
     const saved = await btFetch('/exchanges/' + orderId, 'POST', Object.assign({
