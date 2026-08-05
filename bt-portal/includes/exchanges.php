@@ -154,6 +154,62 @@ function btp_exchange_row( $order_id ) {
 }
 
 /**
+ * The exchange form writes its request as one run-on customer note:
+ *
+ *   EXCHANGE REQUEST Original Order #: 186976289 Customer: Rachelle Sahni
+ *   Ship to: 311 Phillippa St, Hinsdale, IL 60521 Item 1: Ordered: Performance
+ *   Shorts (TT11SHY) | AM | Royal Wants: New size AS (same product & color)
+ *
+ * Unreadable at a glance in a table, so it gets pulled apart here rather than
+ * in the browser: parsing server-side means one place to fix when the form's
+ * wording changes, and the raw note is always returned as a fallback so a
+ * format this doesn't recognise still shows up in full.
+ *
+ * Customer and Ship to are dropped — the table already has both columns.
+ */
+function btp_parse_exchange_note( $note ) {
+    $note = trim( (string) $note );
+    $out  = array( 'original_order' => '', 'items' => array(), 'raw' => $note, 'parsed' => false );
+    if ( $note === '' ) return $out;
+
+    if ( preg_match( '/Original Order\s*#?\s*:\s*([^\s]+)/i', $note, $m ) ) {
+        $out['original_order'] = trim( $m[1], " \t,." );
+    }
+
+    // Split on "Item N:" so multi-item requests come through as separate rows.
+    if ( preg_match_all( '/Item\s*\d+\s*:\s*(.*?)(?=Item\s*\d+\s*:|$)/is', $note, $chunks ) ) {
+        foreach ( $chunks[1] as $chunk ) {
+            $chunk = trim( $chunk );
+            if ( $chunk === '' ) continue;
+
+            $ordered = '';
+            $wants   = '';
+            if ( preg_match( '/Ordered\s*:\s*(.*?)\s*Wants\s*:\s*(.*)$/is', $chunk, $mm ) ) {
+                $ordered = trim( $mm[1] );
+                $wants   = trim( $mm[2] );
+            } elseif ( preg_match( '/Ordered\s*:\s*(.*)$/is', $chunk, $mm ) ) {
+                $ordered = trim( $mm[1] );
+            } else {
+                $ordered = $chunk;
+            }
+
+            // "Performance Shorts (TT11SHY) | AM | Royal" -> name + attributes
+            $parts = array_values( array_filter( array_map( 'trim', explode( '|', $ordered ) ), 'strlen' ) );
+            $name  = array_shift( $parts );
+
+            $out['items'][] = array(
+                'name'  => (string) $name,
+                'attrs' => $parts,
+                'wants' => $wants,
+            );
+        }
+    }
+
+    $out['parsed'] = ( $out['original_order'] !== '' || ! empty( $out['items'] ) );
+    return $out;
+}
+
+/**
  * Order -> payload for the portal table.
  * Line items come back with their formatted meta so whatever the exchange
  * form attached (size wanted, original order, reason) shows up without this
@@ -162,23 +218,40 @@ function btp_exchange_row( $order_id ) {
 function btp_exchange_payload( $order ) {
     $pid   = btp_exchange_product_id();
     $items = array();
+    $extra = array();
 
     foreach ( $order->get_items() as $item ) {
-        if ( (int) $item->get_product_id() === $pid ) continue; // the shipping line itself
         $meta = array();
-        // '_' prefix hides Woo's internal item meta; everything the exchange
-        // form attached to the line comes through untouched.
         foreach ( $item->get_formatted_meta_data('_', true) as $m ) {
             $meta[] = array(
                 'key'   => wp_strip_all_tags( $m->display_key ),
                 'value' => trim( wp_strip_all_tags( $m->display_value ) ),
             );
         }
+
+        // The shipping line is not something being exchanged, but the form may
+        // have hung the exchange details on it — keep that meta rather than
+        // throwing the whole line away.
+        if ( (int) $item->get_product_id() === $pid ) {
+            $extra = array_merge( $extra, $meta );
+            continue;
+        }
+
         $items[] = array(
             'name' => $item->get_name(),
             'qty'  => (int) $item->get_quantity(),
             'meta' => $meta,
         );
+    }
+
+    // Order-level custom fields, minus Woo's own internals.
+    foreach ( $order->get_meta_data() as $m ) {
+        $d = $m->get_data();
+        $k = isset($d['key']) ? (string) $d['key'] : '';
+        if ( $k === '' || $k[0] === '_' ) continue;
+        $v = $d['value'];
+        if ( ! is_scalar($v) ) continue;
+        $extra[] = array( 'key' => $k, 'value' => trim( wp_strip_all_tags( (string) $v ) ) );
     }
 
     // Woo joins address lines with <br/>; strip the tags without gluing the
@@ -208,6 +281,8 @@ function btp_exchange_payload( $order ) {
         'phone'         => $order->get_billing_phone(),
         'address'       => $ship,
         'customer_note' => $order->get_customer_note(),
+        'request'       => btp_parse_exchange_note( $order->get_customer_note() ),
+        'extra'         => $extra,
         'edit_url'      => $order->get_edit_order_url(),
         'items'         => $items,
     );

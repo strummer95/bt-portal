@@ -105,6 +105,15 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-pill.unpaid { background:#fff3e0; color:#8a4b00; border:1px solid #f0c78a; }
 #bt-schedule-app .ex-action { background:#f2f3f8; border:1.5px solid #d8dbe6; border-radius:6px; padding:5px 10px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#5a6079; cursor:pointer; white-space:nowrap; transition:all .15s; }
 #bt-schedule-app .ex-action:hover { border-color:#0f1240; color:#0f1240; }
+#bt-schedule-app .ex-orig { font-family:'Barlow Condensed',sans-serif; font-size:14px; letter-spacing:.06em; text-transform:uppercase; color:#8a90a6; margin-bottom:8px; }
+#bt-schedule-app .ex-orig strong { color:#0f1240; letter-spacing:0; }
+#bt-schedule-app .ex-req-item { border-left:3px solid #e8eaf0; padding:2px 0 2px 12px; margin-bottom:10px; }
+#bt-schedule-app .ex-req-item:last-child { margin-bottom:0; }
+#bt-schedule-app .ex-ordered { font-size:16px; font-weight:600; color:#0f1240; display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+#bt-schedule-app .ex-chip { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; background:#f2f3f8; border:1px solid #e0e3ee; border-radius:4px; padding:1px 7px; color:#5a6079; }
+#bt-schedule-app .ex-wants { font-size:16px; font-weight:600; color:#1b5e20; margin-top:3px; display:flex; align-items:baseline; gap:6px; }
+#bt-schedule-app .ex-arrow { color:#9ca3b8; font-weight:400; }
+#bt-schedule-app .ex-raw { padding:8px 10px; background:#fff8e1; border-radius:4px; font-size:14px; color:#6b5200; line-height:1.5; }
 #bt-schedule-app .ex-select { font-family:'Barlow',sans-serif; font-size:15px; padding:6px 8px; border:1.5px solid #d8dbe6; border-radius:6px; background:#fff; color:#0f1240; cursor:pointer; }
 #bt-schedule-app .ex-input { font-family:'Barlow',sans-serif; font-size:15px; padding:6px 8px; border:1.5px solid #d8dbe6; border-radius:6px; width:100%; box-sizing:border-box; color:#0f1240; }
 #bt-schedule-app .ex-input:focus, #bt-schedule-app .ex-select:focus { outline:none; border-color:var(--pink); }
@@ -3392,11 +3401,34 @@ function btRenderExchanges() {
       ).join('');
       return '<div style="margin-bottom:6px;"><span style="font-weight:600;">' + btEscHtml(it.name) +
              '</span> &times;' + it.qty + meta + '</div>';
-    }).join('') || '<span style="color:#9ca3b8;font-style:italic;">Shipping only</span>';
+    }).join('');
 
-    const note = x.customer_note
-      ? '<div style="margin-top:6px;padding:6px 8px;background:#fff8e1;border-radius:4px;font-size:14px;color:#6b5200;">' + btEscHtml(x.customer_note) + '</div>'
-      : '';
+    // The form writes the request as one run-on sentence. Parsed server-side
+    // into fields; the raw note is the fallback so an unrecognised format is
+    // still shown in full rather than swallowed.
+    const req = x.request || {};
+    let detail;
+    if (req.parsed) {
+      const orig = req.original_order
+        ? '<div class="ex-orig">Original order <strong>#' + btEscHtml(req.original_order) + '</strong></div>'
+        : '';
+      const lines = (req.items || []).map(it => {
+        const chips = (it.attrs || []).map(a => '<span class="ex-chip">' + btEscHtml(a) + '</span>').join('');
+        const wants = it.wants
+          ? '<div class="ex-wants"><span class="ex-arrow">&rarr;</span>' + btEscHtml(it.wants) + '</div>'
+          : '';
+        return '<div class="ex-req-item"><div class="ex-ordered">' + btEscHtml(it.name) + chips + '</div>' + wants + '</div>';
+      }).join('');
+      detail = '<div class="ex-req">' + orig + lines + '</div>';
+    } else if (x.customer_note) {
+      detail = '<div class="ex-raw">' + btEscHtml(x.customer_note) + '</div>';
+    } else if ((x.extra || []).length) {
+      detail = '<div class="ex-req">' + x.extra.map(m =>
+        '<div class="ex-orig">' + btEscHtml(m.key) + ': <strong>' + btEscHtml(m.value) + '</strong></div>').join('') + '</div>';
+    } else {
+      detail = '<span style="color:#9ca3b8;font-style:italic;">No exchange details on this order &mdash; ' +
+               '<a href="' + btEscHtml(x.edit_url) + '" target="_blank" rel="noopener" style="color:#1a1f5e;">open it in Woo</a></span>';
+    }
 
     const updated = x.updated_at
       ? '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.updated_by || '—') + ' &middot; ' +
@@ -3425,7 +3457,7 @@ function btRenderExchanges() {
         '<a href="mailto:' + btEscHtml(x.email) + '" style="color:#1a1f5e;font-size:14px;">' + btEscHtml(x.email) + '</a>' +
         '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.phone) + '</div>' +
         '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.address) + '</div></td>' +
-      '<td>' + items + note + '</td>' +
+      '<td>' + items + detail + '</td>' +
       '<td>' + statusCell + updated + '</td>' +
       '<td><input class="ex-input" value="' + btEscHtml(x.tracking) + '" placeholder="Tracking #" ' +
         'onchange="btSaveExchange(' + x.order_id + ', {tracking:this.value})"></td>' +
