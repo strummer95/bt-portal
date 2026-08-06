@@ -79,12 +79,33 @@ add_filter('query_vars', function( $vars ) {
 });
 
 /**
- * Without this, WordPress sees /employees/exchanges resolving to the
- * /employees/ page and 301s to the "correct" URL, taking the tab with it.
+ * WordPress sees /employees/exchanges resolving to the /employees/ page and
+ * wants to 301 to the "correct" URL, taking the tab with it.
+ *
+ * But redirect_canonical is also what sends boomerts.com to www.boomerts.com.
+ * Switching it off wholesale left the portal on the bare host while rest_url()
+ * still pointed at www — a different origin, so every API call on the page
+ * failed and the tables came up empty.
+ *
+ * So: allow any redirect that only corrects scheme or host, block only the
+ * ones that would change the path and lose the tab.
  */
-add_filter('redirect_canonical', function( $redirect ) {
-    return get_query_var('btp_tab') ? false : $redirect;
-});
+add_filter('redirect_canonical', function( $redirect, $requested ) {
+    if ( ! get_query_var('btp_tab') ) return $redirect;
+    if ( ! $redirect || ! $requested )  return $redirect;
+
+    $r = wp_parse_url( $redirect );
+    $q = wp_parse_url( $requested );
+
+    $r_path = isset($r['path']) ? untrailingslashit($r['path']) : '';
+    $q_path = isset($q['path']) ? untrailingslashit($q['path']) : '';
+
+    // Same path — this is a www/https correction, and it must be allowed
+    // through or the page ends up on a host the REST API isn't on.
+    if ( $r_path === $q_path ) return $redirect;
+
+    return false;
+}, 10, 2);
 
 /** Which tab this request asked for, as a tab id. Empty string if none. */
 function btp_requested_tab() {

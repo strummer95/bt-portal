@@ -1877,13 +1877,24 @@ function btBuildCard(job) {
 }
 
 async function btLoadAndRenderStores() {
-  const [rawStores, rawCats] = await Promise.all([
-    btFetch('/stores'),
-    btFetch('/store-categories'),
-  ]);
-  btStores = rawStores.map(btNormalizeStore);
-  btStoreCategories = (rawCats || []).slice().sort((a,b) => (parseInt(a.sort_order)||0)-(parseInt(b.sort_order)||0));
-  btRenderStores();
+  try {
+    const [rawStores, rawCats] = await Promise.all([
+      btFetch('/stores'),
+      btFetch('/store-categories'),
+    ]);
+    btStores = rawStores.map(btNormalizeStore);
+    btStoreCategories = (rawCats || []).slice().sort((a,b) => (parseInt(a.sort_order)||0)-(parseInt(b.sort_order)||0));
+    btRenderStores();
+  } catch (e) {
+    /* An empty table is indistinguishable from "all your stores are gone",
+       which is a horrible thing to show someone. Say it failed instead. */
+    const tbody = document.getElementById('btStoresBody');
+    if (tbody && !btStores.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="padding:40px;text-align:center;color:#b71c1c;">' +
+        'Could not load stores &mdash; nothing has been lost. Refresh to try again.</td></tr>';
+    }
+    console.error('BT stores load failed:', e);
+  }
 }
 
 /* ── COPY STORE URL ── */
