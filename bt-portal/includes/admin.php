@@ -40,7 +40,7 @@ function btp_admin_page() {
 
     if ( isset($_POST['btp_redirect_cap']) && check_admin_referer('btp_save_settings') ) {
         $cap = sanitize_text_field( wp_unslash($_POST['btp_redirect_cap']) );
-        if ( in_array($cap, array('edit_posts','publish_posts','manage_options','read'), true) ) {
+        if ( in_array($cap, array('portal','edit_posts','publish_posts','manage_options','read'), true) ) {
             update_option('btp_redirect_cap', $cap);
         }
     }
@@ -81,17 +81,20 @@ function btp_admin_page() {
       </form>
 
       <h2>Redirect access</h2>
-      <p style="max-width:640px;">Everything else in the portal is open to anyone who can load the page. The Redirect
-        tool creates real published pages on the site, so it asks for a capability. Pick the lowest one that covers
-        the people who actually need it.</p>
+      <p style="max-width:640px;">By default Redirect works like every other tab &mdash; anyone who can open the portal
+        can use it, and no WordPress account is needed. The other options require staff to be signed in to
+        boomerts.com <em>as well</em>, which is only worth it if you want Redirect held to a higher bar than the rest
+        of the portal. Note that Redirect publishes real pages on the site, so whatever guards the portal page is
+        what guards page creation.</p>
       <form method="post" style="margin-bottom:24px;">
         <?php wp_nonce_field('btp_save_settings'); ?>
         <select name="btp_redirect_cap">
           <?php
           $caps = array(
-            'read'          => 'Any signed-in user (Subscriber and up)',
-            'edit_posts'    => 'Contributor and up — default',
-            'publish_posts' => 'Author and up',
+            'portal'        => 'Anyone who can open the portal — default',
+            'read'          => 'Signed in to WordPress (Subscriber and up)',
+            'edit_posts'    => 'Signed in as Contributor or above',
+            'publish_posts' => 'Signed in as Author or above',
             'manage_options'=> 'Administrators only',
           );
           $cur = btp_redirect_capability();
@@ -101,7 +104,7 @@ function btp_admin_page() {
           ?>
         </select>
         <?php submit_button('Save', 'secondary', 'submit_cap', false); ?>
-        <p class="description">Signed-out visitors are never given access, whatever this is set to.</p>
+        <p class="description">Anything other than the default means staff need a WordPress login on top of the portal.</p>
       </form>
 
       <h2>Customer email branding</h2>
