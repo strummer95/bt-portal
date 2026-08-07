@@ -275,6 +275,151 @@ function btp_exchange_meta_label( $key ) {
 }
 
 /**
+ * Which platform the customer's original order number came from.
+ *
+ * The two stores Boomer T's runs against number their orders differently and
+ * neither prints the platform name on the confirmation email, so staff were
+ * eyeballing the digits. The rule is the length and the leading digit:
+ *   9 digits starting 1 -> OrderMyGear
+ *   7 digits starting 8 -> Chipply
+ * Anything else is left blank rather than guessed at — a wrong badge is worse
+ * than no badge when someone is about to go looking for the order.
+ */
+function btp_exchange_source( $number ) {
+    $d = preg_replace( '/\D+/', '', (string) $number );
+    $src = '';
+    if ( strlen($d) === 9 && $d[0] === '1' ) $src = 'OMG';
+    if ( strlen($d) === 7 && $d[0] === '8' ) $src = 'Chipply';
+    return (string) apply_filters( 'btp_exchange_source', $src, $number );
+}
+
+/**
+ * Every meta pair on the Exchange Shipping line, hidden keys included.
+ *
+ * The portal's display pass hides underscore-prefixed keys, which is right for
+ * showing to staff but wrong for parsing: if the form ever writes its fields
+ * as system meta they still need reading. Woo's admin screen passes an empty
+ * hide-prefix for the same reason, which is why _btgsb_combined shows up there
+ * and not here.
+ */
+function btp_exchange_line_meta( $order ) {
+    $pid = btp_exchange_product_id();
+    $out = array();
+    foreach ( $order->get_items() as $item ) {
+        if ( (int) $item->get_product_id() !== $pid ) continue;
+        foreach ( $item->get_formatted_meta_data( '', true ) as $m ) {
+            $out[] = array(
+                'key'   => wp_strip_all_tags( (string) $m->key ),
+                'label' => wp_strip_all_tags( (string) $m->display_key ),
+                'value' => trim( wp_strip_all_tags( (string) $m->display_value ) ),
+            );
+        }
+    }
+    return $out;
+}
+
+/**
+ * One item written as a single string, however the form chooses to join it:
+ *   "2x Performance Shorts (TT11SHY) | AM | Royal -> AS"
+ * Quantity may lead or trail, the wanted size may be arrowed or worded, and
+ * product/size/colour are pipe separated. Anything missing stays empty rather
+ * than shifting the remaining values one column left.
+ */
+function btp_exchange_parse_combined( $value ) {
+    $out = array( 'name' => '', 'size' => '', 'color' => '', 'qty' => 1, 'want' => '' );
+    $v = trim( (string) $value );
+    if ( $v === '' ) return $out;
+
+    if ( preg_match( '/^\s*(\d+)\s*[x\x{00d7}]\s*(.+)$/iu', $v, $m ) ) {
+        $out['qty'] = max( 1, (int) $m[1] ); $v = trim( $m[2] );
+    } elseif ( preg_match( '/^(.+?)\s*[x\x{00d7}]\s*(\d+)\s*$/iu', $v, $m ) ) {
+        $out['qty'] = max( 1, (int) $m[2] ); $v = trim( $m[1] );
+    }
+
+    // Arrow first — an explicit arrow is unambiguous where the word "to" is not.
+    if ( preg_match( '/^(.*?)\s*(?:->|=>|\x{2192}|\x{27a1})\s*(\S+)\s*$/u', $v, $m ) ) {
+        $v = trim( $m[1] ); $out['want'] = trim( $m[2], " .,()" );
+    } elseif ( preg_match( '/^(.*?)\s+to\s+([A-Za-z0-9]{1,5})\s*$/i', $v, $m ) ) {
+        $v = trim( $m[1] ); $out['want'] = trim( $m[2], " .,()" );
+    }
+
+    $parts = array_values( array_filter( array_map( 'trim', explode( '|', $v ) ), 'strlen' ) );
+    if ( empty( $parts ) ) $parts = array( $v );
+
+    $out['name']  = (string) array_shift( $parts );
+    $out['size']  = isset($parts[0]) ? $parts[0] : '';
+    $out['color'] = isset($parts[1]) ? $parts[1] : '';
+    return $out;
+}
+
+/**
+ * Read the request off the Exchange Shipping line's meta.
+ *
+ * The form moved from writing one run-on customer note to hanging labelled
+ * fields on the cart item, which is better — except the portal only knew how
+ * to read the note, so the labelled fields fell through to the raw-meta
+ * fallback and the Product cell filled up with the order number and the school
+ * name it was already showing two columns to the left.
+ *
+ * Field names are matched, not hardcoded: "Item 1 Product", "Item 1: Size",
+ * "Item 2 New Size" and so on, grouped by the number. So whichever of those
+ * the form ends up writing, the columns fill in without a plugin release to
+ * match it.
+ */
+function btp_exchange_request_from_line_meta( $order ) {
+    $meta = btp_exchange_line_meta( $order );
+    if ( empty( $meta ) ) return null;
+
+    $out  = array( 'original_order' => '', 'store' => '', 'items' => array(), 'raw' => '', 'parsed' => false );
+    $rows = array();
+
+    foreach ( $meta as $m ) {
+        $label = trim( $m['label'] );
+        $value = trim( $m['value'] );
+        if ( $value === '' || $label === '' ) continue;
+        if ( $label[0] === '_' ) continue;            // system flag, not a human field
+
+        if ( $out['original_order'] === '' && preg_match( '/original\s*order|order\s*(number|#|no\b)/i', $label ) ) {
+            $out['original_order'] = trim( $value, " \t#,." );
+            continue;
+        }
+        if ( $out['store'] === '' && preg_match( '/school|team|store|organi[sz]ation|group/i', $label ) ) {
+            $out['store'] = $value;
+            continue;
+        }
+
+        if ( ! preg_match( '/^item\s*(\d+)\s*[:\-]?\s*(.*)$/i', $label, $mm ) ) continue;
+
+        $i     = (int) $mm[1];
+        $field = strtolower( trim( $mm[2] ) );
+        if ( ! isset( $rows[$i] ) ) $rows[$i] = array( 'name' => '', 'size' => '', 'color' => '', 'qty' => 1, 'want' => '' );
+
+        if ( $field === '' ) {
+            $rows[$i] = btp_exchange_parse_combined( $value );
+        } elseif ( preg_match( '/new\s*size|want|exchange\s*for|replacement/', $field ) ) {
+            $rows[$i]['want'] = $value;
+        } elseif ( preg_match( '/size/', $field ) ) {
+            $rows[$i]['size'] = $value;
+        } elseif ( preg_match( '/colou?r/', $field ) ) {
+            $rows[$i]['color'] = $value;
+        } elseif ( preg_match( '/qty|quantity/', $field ) ) {
+            $rows[$i]['qty'] = max( 1, (int) $value );
+        } else {
+            $rows[$i]['name'] = $value;               // product / item / style
+        }
+    }
+
+    ksort( $rows );
+    foreach ( $rows as $r ) {
+        if ( $r['name'] === '' && $r['size'] === '' && $r['color'] === '' && $r['want'] === '' ) continue;
+        $out['items'][] = $r;
+    }
+
+    $out['parsed'] = ( $out['original_order'] !== '' || $out['store'] !== '' || ! empty( $out['items'] ) );
+    return $out['parsed'] ? $out : null;
+}
+
+/**
  * The exchange form stores the request structurally on the order:
  *   _bt_exchange_request  yes
  *   _bt_original_order    the customer's original order number
@@ -367,9 +512,31 @@ function btp_exchange_payload( $order ) {
     $ship     = preg_replace( '/<br\s*\/?>/i', ', ', (string) $ship_raw );
     $ship     = trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $ship ) ), " ,\t\n" );
 
-    // Structured meta first; the note is only a fallback.
-    $request = btp_exchange_request_from_meta( $order );
-    if ( ! $request ) $request = btp_parse_exchange_note( $order->get_customer_note() );
+    /* Three places the request can live, best first: structured order meta,
+       labelled meta on the shipping line, then the old run-on customer note.
+       They are merged rather than raced, because the form has changed shape
+       twice — an order can carry the order number one way and the item rows
+       another, and taking only the first hit loses whatever the other held. */
+    $request = null;
+    $candidates = array(
+        btp_exchange_request_from_meta( $order ),
+        btp_exchange_request_from_line_meta( $order ),
+        btp_parse_exchange_note( $order->get_customer_note() ),
+    );
+    foreach ( $candidates as $cand ) {
+        if ( ! $cand ) continue;
+        if ( ! $request ) { $request = $cand; continue; }
+        if ( empty( $request['items'] ) && ! empty( $cand['items'] ) )       $request['items']          = $cand['items'];
+        if ( $request['original_order'] === '' )                              $request['original_order'] = $cand['original_order'];
+        if ( $request['store'] === '' )                                       $request['store']          = $cand['store'];
+        if ( $request['raw'] === '' && ! empty( $cand['raw'] ) )              $request['raw']            = $cand['raw'];
+    }
+    if ( ! $request ) $request = array( 'original_order' => '', 'store' => '', 'items' => array(), 'raw' => '', 'parsed' => false );
+
+    if ( $request['original_order'] === '' ) {
+        $request['original_order'] = trim( (string) $order->get_meta( '_bt_original_order' ), " \t#" );
+    }
+    $request['parsed'] = ( $request['original_order'] !== '' || $request['store'] !== '' || ! empty( $request['items'] ) );
 
     /* School/Team can arrive three ways depending on how the form is wired:
        inside the request note, as order meta, or as meta on the shipping line.
@@ -385,6 +552,14 @@ function btp_exchange_payload( $order ) {
             }
         }
     }
+
+    /* Original Order # and School/Team have their own columns now. Left in
+       here they came back a second time in the Product cell whenever there
+       were no item rows to show — the order number and the school name
+       repeated one column to the right of themselves. */
+    $extra = array_values( array_filter( $extra, function( $m ) {
+        return ! preg_match( '/original\s*order|order\s*(number|#|no\b)|school|team|store|organi[sz]ation|group/i', $m['key'] );
+    } ) );
 
     return array(
         'order_id'      => $order->get_id(),
@@ -407,8 +582,13 @@ function btp_exchange_payload( $order ) {
         'phone'         => $order->get_billing_phone(),
         'address'       => $ship,
         'customer_note' => $order->get_customer_note(),
-        'request'       => $request,
-        'store'         => $store,
+        'request'        => $request,
+        'store'          => $store,
+        // The number the customer typed in from their confirmation email, and
+        // which platform it points at. Own column — staff go looking for the
+        // original order more often than anything else on the row.
+        'original_order' => $request['original_order'],
+        'source'         => btp_exchange_source( $request['original_order'] ),
         'extra'         => $extra,
         'edit_url'      => $order->get_edit_order_url(),
         'items'         => $items,

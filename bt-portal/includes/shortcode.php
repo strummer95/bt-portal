@@ -104,7 +104,7 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-filter { padding:5px 14px; border-radius:20px; border:1.5px solid #d8dbe6; background:#fff; color:#5a6079; font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
 #bt-schedule-app .ex-filter:hover { border-color:#0f1240; color:#0f1240; }
 #bt-schedule-app .ex-filter.active { background:#0f1240; border-color:#0f1240; color:#fff; }
-#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1400px; }
+#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1520px; }
 #bt-schedule-app .ex-table th { padding:10px 12px; text-align:left; background:#0f1240; color:#fff; font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.07em; text-transform:uppercase; font-size:15px; white-space:nowrap; }
 #bt-schedule-app .ex-table td { padding:12px; border-bottom:1px solid #e8eaf0; color:#0f1240; vertical-align:top; }
 #bt-schedule-app .ex-table tr:hover td { background:#f7f8fc; }
@@ -145,6 +145,10 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-table th.ex-g2, #bt-schedule-app .ex-table td.ex-g2 { border-right:2px solid #c9cee4; }
 #bt-schedule-app .ex-table td.ex-c .ex-wants { color:#1b5e20; font-weight:700; }
 #bt-schedule-app .ex-store { font-weight:600; color:#0f1240; font-size:16px; }
+#bt-schedule-app .ex-orignum { font-weight:700; font-size:16px; color:#0f1240; white-space:nowrap; letter-spacing:.01em; }
+#bt-schedule-app .ex-src { display:inline-block; margin-top:5px; padding:2px 9px; border-radius:4px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; background:#f2f3f8; border:1px solid #e0e3ee; color:#5a6079; }
+#bt-schedule-app .ex-src.omg  { background:#e8eefc; border-color:#bfd0f4; color:#17398f; }
+#bt-schedule-app .ex-src.chip { background:#fdeaf5; border-color:#f3bedd; color:#9c1266; }
 #bt-schedule-app .ex-none { color:#9ca3b8; font-style:italic; font-size:15px; }
 #bt-schedule-app .ex-pair { min-height:26px; margin-bottom:8px; }
 #bt-schedule-app .ex-pair:last-child { margin-bottom:0; }
@@ -1088,6 +1092,7 @@ add_shortcode( 'bt_schedule', function() {
         <thead>
           <tr>
             <th style="width:130px;">Order</th>
+            <th style="width:135px;">Orig Order #</th>
             <th>Customer</th>
             <th class="ex-g ex-g1" style="width:160px;">School / Team</th>
             <th class="ex-g" style="width:250px;">Product</th>
@@ -1102,7 +1107,7 @@ add_shortcode( 'bt_schedule', function() {
           </tr>
         </thead>
         <tbody id="btExBody">
-          <tr><td colspan="12" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
+          <tr><td colspan="13" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -3543,13 +3548,13 @@ function btEscHtml(s) {
 
 async function btLoadExchanges() {
   const tbody = document.getElementById('btExBody');
-  tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
   try {
     btExData = await btFetch('/exchanges');
     btRenderExchanges();
   } catch(e) {
     const expired = String(e.message||'').indexOf('403') !== -1;
-    tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#b71c1c;">' +
+    tbody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:#b71c1c;">' +
       (expired ? 'Session expired — reload the page.' : 'Error loading exchanges.') + '</td></tr>';
   }
 }
@@ -3591,7 +3596,7 @@ function btRenderExchanges() {
   const tbody = document.getElementById('btExBody');
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
+    tbody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
       (all.length ? 'Nothing in this status.' : 'No exchange orders yet.') + '</td></tr>';
     return;
   }
@@ -3630,6 +3635,9 @@ function btRenderExchanges() {
       if (x.customer_note) {
         cProduct = '<div class="ex-raw">' + btEscHtml(x.customer_note) + '</div>';
       } else if ((x.extra || []).length) {
+        // Whatever the form attached that doesn't map to a column. The order
+        // number and School/Team are filtered out server-side — they have
+        // their own columns and were being printed here a second time.
         cProduct = x.extra.map(m => '<div class="ex-orig">' + btEscHtml(m.key) +
           ': <strong>' + btEscHtml(m.value) + '</strong></div>').join('');
       } else {
@@ -3650,9 +3658,14 @@ function btRenderExchanges() {
       ? '<span class="ex-store">' + btEscHtml(x.store) + '</span>'
       : '<span class="ex-none">&mdash;</span>';
 
-    const orig = (req.original_order)
-      ? '<div class="ex-orig" style="margin:4px 0 0;">Orig <strong>#' + btEscHtml(req.original_order) + '</strong></div>'
-      : '';
+    /* The customer's own order number, and which platform it belongs to.
+       9 digits from 1 is OrderMyGear, 7 digits from 8 is Chipply; the badge is
+       left off rather than guessed when it is neither. */
+    const srcCls = { 'OMG': 'omg', 'Chipply': 'chip' };
+    const origCell = x.original_order
+      ? '<div class="ex-orignum">#' + btEscHtml(x.original_order) + '</div>' +
+        (x.source ? '<div class="ex-src ' + (srcCls[x.source] || '') + '">' + btEscHtml(x.source) + '</div>' : '')
+      : dash;
 
     const updated = x.updated_at
       ? '<div style="font-size:13px;color:#9ca3b8;margin-top:4px;">' + btEscHtml(x.updated_by || '—') + ' &middot; ' +
@@ -3676,7 +3689,8 @@ function btRenderExchanges() {
     return '<tr style="' + dim + '">' +
       '<td><a href="' + btEscHtml(x.edit_url) + '" target="_blank" rel="noopener" style="color:#1a1f5e;font-weight:700;">#' + btEscHtml(x.number) + '</a>' +
         '<div style="font-size:14px;color:#9ca3b8;">' + dateStr + '</div>' +
-        '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.woo_status_lbl) + '</div>' + orig + '</td>' +
+        '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.woo_status_lbl) + '</div></td>' +
+      '<td>' + origCell + '</td>' +
       '<td><div style="font-weight:600;">' + btEscHtml(x.customer) + '</div>' +
         '<a href="mailto:' + btEscHtml(x.email) + '" style="color:#1a1f5e;font-size:14px;">' + btEscHtml(x.email) + '</a>' +
         '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.phone) + '</div>' +
