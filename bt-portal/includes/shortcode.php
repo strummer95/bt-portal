@@ -104,7 +104,7 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-filter { padding:5px 14px; border-radius:20px; border:1.5px solid #d8dbe6; background:#fff; color:#5a6079; font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:all .15s; }
 #bt-schedule-app .ex-filter:hover { border-color:#0f1240; color:#0f1240; }
 #bt-schedule-app .ex-filter.active { background:#0f1240; border-color:#0f1240; color:#fff; }
-#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1680px; }
+#bt-schedule-app .ex-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; min-width:1620px; }
 #bt-schedule-app .ex-table th { padding:10px 12px; text-align:left; background:#0f1240; color:#fff; font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.07em; text-transform:uppercase; font-size:15px; white-space:nowrap; }
 #bt-schedule-app .ex-table td { padding:12px; border-bottom:1px solid #e8eaf0; color:#0f1240; vertical-align:top; }
 #bt-schedule-app .ex-table tr:hover td { background:#f7f8fc; }
@@ -153,6 +153,8 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-way { display:inline-block; padding:3px 10px; border-radius:4px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; background:#f2f3f8; border:1px solid #e0e3ee; color:#5a6079; white-space:nowrap; }
 #bt-schedule-app .ex-way.pickup { background:#fff3e0; border-color:#f0c78a; color:#8a4b00; }
 #bt-schedule-app .ex-way.drop { background:#eef7ee; border-color:#c3e0c3; color:#1b5e20; }
+#bt-schedule-app .ex-table td.ex-out { white-space:normal; }
+#bt-schedule-app .ex-track { margin-top:6px; text-align:center; }
 #bt-schedule-app .ex-none { color:#9ca3b8; font-style:italic; font-size:15px; }
 #bt-schedule-app .ex-pair { min-height:26px; margin-bottom:8px; }
 #bt-schedule-app .ex-pair:last-child { margin-bottom:0; }
@@ -1105,15 +1107,14 @@ add_shortcode( 'bt_schedule', function() {
             <th class="ex-g" style="width:55px;">Qty</th>
             <th class="ex-g ex-g2" style="width:90px;">New Size</th>
             <th style="width:95px;">In</th>
-            <th style="width:95px;">Out</th>
+            <th style="width:165px;">Out</th>
             <th style="width:140px;">Status</th>
-            <th style="width:150px;">Return Tracking</th>
             <th style="width:180px;">Notes</th>
             <th style="width:70px;"></th>
           </tr>
         </thead>
         <tbody id="btExBody">
-          <tr><td colspan="15" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
+          <tr><td colspan="14" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -3554,13 +3555,13 @@ function btEscHtml(s) {
 
 async function btLoadExchanges() {
   const tbody = document.getElementById('btExBody');
-  tbody.innerHTML = '<tr><td colspan="15" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
   try {
     btExData = await btFetch('/exchanges');
     btRenderExchanges();
   } catch(e) {
     const expired = String(e.message||'').indexOf('403') !== -1;
-    tbody.innerHTML = '<tr><td colspan="15" style="padding:40px;text-align:center;color:#b71c1c;">' +
+    tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#b71c1c;">' +
       (expired ? 'Session expired — reload the page.' : 'Error loading exchanges.') + '</td></tr>';
   }
 }
@@ -3602,7 +3603,7 @@ function btRenderExchanges() {
   const tbody = document.getElementById('btExBody');
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="15" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
+    tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#9ca3b8;font-style:italic;">' +
       (all.length ? 'Nothing in this status.' : 'No exchange orders yet.') + '</td></tr>';
     return;
   }
@@ -3671,9 +3672,13 @@ function btRenderExchanges() {
     const cIn  = (m.send === 'dropoff')
       ? '<div class="ex-way drop">Drop off</div>'
       : '<div class="ex-way">Mailed</div>';
+    /* Tracking belongs to the outbound leg, so it lives under it — and only
+       on rows that actually get shipped. A pickup has nothing in the post. */
     const cOut = (m.return === 'pickup')
       ? '<div class="ex-way pickup">Pickup</div>'
-      : '<div class="ex-way">Ship</div>';
+      : '<div class="ex-way">Ship</div>' +
+        '<input class="ex-input ex-track" value="' + btEscHtml(x.tracking) + '" placeholder="Tracking #" ' +
+        'onchange="btSaveExchange(' + x.order_id + ', {tracking:this.value})">';
 
     /* The customer's own order number, and which platform it belongs to.
        9 digits from 1 is OrderMyGear, 7 digits from 8 is Chipply; the badge is
@@ -3727,10 +3732,8 @@ function btRenderExchanges() {
       '<td class="ex-c ex-g">' + cQty + '</td>' +
       '<td class="ex-c ex-g ex-g2">' + cNew + '</td>' +
       '<td class="ex-c">' + cIn + '</td>' +
-      '<td class="ex-c">' + cOut + '</td>' +
+      '<td class="ex-c ex-out">' + cOut + '</td>' +
       '<td>' + statusCell + updated + '</td>' +
-      '<td><input class="ex-input" value="' + btEscHtml(x.tracking) + '" placeholder="Tracking #" ' +
-        'onchange="btSaveExchange(' + x.order_id + ', {tracking:this.value})"></td>' +
       '<td><input class="ex-input" value="' + btEscHtml(x.notes) + '" placeholder="Notes" ' +
         'onchange="btSaveExchange(' + x.order_id + ', {notes:this.value})"></td>' +
       '<td>' + action + '</td>' +
