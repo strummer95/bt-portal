@@ -55,6 +55,14 @@ function btp_exchange_mail_decision( $order, $status, $tracking, $prev_status ) 
         return '';
     }
 
+    /* Ready for pickup is the shipped-equivalent for a collection: the work is
+       done, the customer needs telling. No tracking follow-up, because nothing
+       is in the post. */
+    if ( $status === 'ready_pickup' ) {
+        if ( $order->get_meta('_btp_ex_mailed_pickup') === 'yes' ) return '';
+        return 'ready_pickup';
+    }
+
     return '';
 }
 
@@ -64,6 +72,8 @@ function btp_exchange_mail_record( $order, $kind, $tracking ) {
         $order->update_meta_data('_btp_ex_mailed_received', 'yes');
     } elseif ( $kind === 'shipped' || $kind === 'shipped-tracking' ) {
         $order->update_meta_data('_btp_ex_mailed_shipped', trim((string) $tracking) === '' ? 'no-tracking' : 'tracking');
+    } elseif ( $kind === 'ready_pickup' ) {
+        $order->update_meta_data('_btp_ex_mailed_pickup', 'yes');
     }
     $order->save();
 }
@@ -86,8 +96,12 @@ function btp_exchange_email_html( $order, $kind, $tracking ) {
 
     if ( $kind === 'received' ) {
         $headline = 'We got your exchange';
-        $lead     = 'Your package arrived at the shop. We\'re working on it now and will ship your replacement out as soon as we can.';
-        $foot     = 'Exchanges usually take up to 7&ndash;10 days to process once they reach us. We\'ll email you again the moment yours ships.';
+        $lead     = 'Your items arrived at the shop. We\'re working on them now and will let you know as soon as your replacement is ready.';
+        $foot     = 'Exchanges usually take up to 7&ndash;10 days to process once they reach us. We\'ll email you again the moment yours is done.';
+    } elseif ( $kind === 'ready_pickup' ) {
+        $headline = 'Your exchange is ready to pick up';
+        $lead     = 'Your replacement is finished and waiting for you at the shop in Oswego.';
+        $foot     = 'We\'re at 1505 Mitchell Dr, Oswego, IL 60543. Give us a call on the way if you want it pulled and ready at the counter.';
     } else {
         $headline = 'Your exchange is on its way';
         $lead     = 'Your replacement has shipped and is heading back to you.';
@@ -167,9 +181,13 @@ function btp_exchange_send_status_email( $order, $kind, $tracking ) {
 
     $orig  = (string) $order->get_meta('_bt_original_order');
     $ref   = $orig !== '' ? ' (order ' . $orig . ')' : '';
-    $subject = ( $kind === 'received' )
-        ? "We received your exchange" . $ref
-        : "Your exchange has shipped" . $ref;
+    if ( $kind === 'received' ) {
+        $subject = "We received your exchange" . $ref;
+    } elseif ( $kind === 'ready_pickup' ) {
+        $subject = "Your exchange is ready to pick up" . $ref;
+    } else {
+        $subject = "Your exchange has shipped" . $ref;
+    }
 
     $from_name  = get_option('woocommerce_email_from_name', get_bloginfo('name'));
     $from_email = get_option('woocommerce_email_from_address', get_option('admin_email'));
@@ -192,9 +210,9 @@ function btp_exchange_send_status_email( $order, $kind, $tracking ) {
     btp_exchange_mail_record( $order, $kind, $tracking );
     $order->add_order_note( sprintf(
         'Exchange %s email sent to %s%s.',
-        ( $kind === 'received' ? 'received' : 'shipped' ),
+        ( $kind === 'received' ? 'received' : ( $kind === 'ready_pickup' ? 'ready for pickup' : 'shipped' ) ),
         $to,
-        ( $kind !== 'received' && trim((string) $tracking) !== '' ? ' with tracking ' . $tracking : '' )
+        ( $kind === 'shipped' || $kind === 'shipped-tracking' ) && trim((string) $tracking) !== '' ? ' with tracking ' . $tracking : ''
     ) );
     return true;
 }

@@ -112,6 +112,7 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-pill.awaiting { background:#fff3e0; color:#b26a00; }
 #bt-schedule-app .ex-pill.received { background:#e3f2fd; color:#0d47a1; }
 #bt-schedule-app .ex-pill.shipped  { background:#e8f5e9; color:#1b5e20; }
+#bt-schedule-app .ex-pill.ready_pickup { background:#fff3e0; color:#8a4b00; }
 #bt-schedule-app .ex-pill.cancelled { background:#fdecea; color:#8c1d18; }
 #bt-schedule-app .ex-pill.unpaid { background:#fff3e0; color:#8a4b00; border:1px solid #f0c78a; }
 #bt-schedule-app .ex-action { background:#f2f3f8; border:1.5px solid #d8dbe6; border-radius:6px; padding:5px 10px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#5a6079; cursor:pointer; white-space:nowrap; transition:all .15s; }
@@ -3694,7 +3695,15 @@ function btRenderExchanges() {
     const statusCell = (x.cancelled || x.unpaid)
       ? '<span class="ex-pill ' + (x.cancelled ? 'cancelled' : 'unpaid') + '">' + btEscHtml(x.woo_status_lbl) + '</span>'
       : '<select class="ex-select" onchange="btSaveExchange(' + x.order_id + ', {status:this.value})">' +
-          Object.keys(statuses).map(k =>
+          Object.keys(statuses).filter(k => {
+            /* A shipped exchange and a collected one are different endings, and
+               only one of them applies to a given row. Offering both invites
+               someone to mark a pickup as Shipped. The row's own status always
+               stays in the list, so nothing that is already set can vanish. */
+            if (k === 'shipped'      && m.return === 'pickup' && x.status !== k) return false;
+            if (k === 'ready_pickup' && m.return !== 'pickup' && x.status !== k) return false;
+            return true;
+          }).map(k =>
             '<option value="' + k + '"' + (x.status === k ? ' selected' : '') + '>' + btEscHtml(statuses[k]) + '</option>'
           ).join('') + '</select>';
 

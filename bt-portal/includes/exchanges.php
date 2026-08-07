@@ -83,10 +83,32 @@ function btp_exchange_product_id() {
 
 function btp_exchange_statuses() {
     return array(
-        'awaiting' => 'Awaiting Items',
-        'received' => 'Received',
-        'shipped'  => 'Shipped',
+        'awaiting'     => 'Awaiting Items',
+        'received'     => 'Received',
+        'shipped'      => 'Shipped',
+        'ready_pickup' => 'Ready for Pickup',
     );
+}
+
+/**
+ * Moving an exchange forward in the portal moves the Woo order with it, so the
+ * two never disagree — someone looking at wp-admin sees the same truth as
+ * someone looking at the portal.
+ *
+ * Shipped and Ready for Pickup both mean the work is done and it has left the
+ * bench, so both complete the order. Awaiting and Received are work in
+ * progress. Cancelled, refunded and failed orders are left alone: reopening
+ * one of those from a status dropdown would be a surprise.
+ */
+function btp_exchange_woo_status_for( $status ) {
+    $map = array(
+        'awaiting'     => 'processing',
+        'received'     => 'processing',
+        'shipped'      => 'completed',
+        'ready_pickup' => 'completed',
+    );
+    $to = isset( $map[ $status ] ) ? $map[ $status ] : '';
+    return (string) apply_filters( 'btp_exchange_woo_status', $to, $status );
 }
 
 /* ============================================================
@@ -731,6 +753,19 @@ function btp_update_exchange( $request ) {
                 if ( $status === 'shipped' && $tracking !== '' ) $note .= ' (tracking ' . $tracking . ')';
                 if ( $user !== '' ) $note .= ' by ' . $user;
                 $order->add_order_note( $note . ' from the BT Portal.' );
+
+                /* Carry the move onto the Woo order itself. Skipped for hidden
+                   rows (tests and mistakes) and for orders that are cancelled,
+                   refunded, failed or not yet paid — none of those should be
+                   marched forward by a dropdown. */
+                $woo_now = $order->get_status();
+                $locked  = array( 'cancelled', 'refunded', 'failed', 'pending', 'on-hold', 'trash', 'checkout-draft' );
+                if ( ! $hidden && ! in_array( $woo_now, $locked, true ) ) {
+                    $woo_to = btp_exchange_woo_status_for( $status );
+                    if ( $woo_to !== '' && $woo_to !== $woo_now ) {
+                        $order->update_status( $woo_to, 'Exchange ' . $labels[$status] . ' in the BT Portal. ' );
+                    }
+                }
             }
 
             /* Tell the customer. Runs on every save, not just status changes,
