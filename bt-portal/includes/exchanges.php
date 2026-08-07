@@ -343,7 +343,10 @@ function btp_exchange_parse_combined( $value ) {
         $v = trim( $m[1] ); $out['want'] = trim( $m[2], " .,()" );
     }
 
-    $parts = array_values( array_filter( array_map( 'trim', explode( '|', $v ) ), 'strlen' ) );
+    /* Positions are kept, empties included: an item with a colour but no size
+       writes "Beanie |  | Black", and dropping the blank would slide Black up
+       into the Size column. */
+    $parts = array_map( 'trim', explode( '|', $v ) );
     if ( empty( $parts ) ) $parts = array( $v );
 
     $out['name']  = (string) array_shift( $parts );
