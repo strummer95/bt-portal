@@ -149,6 +149,9 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .ex-src { display:inline-block; margin-top:5px; padding:2px 9px; border-radius:4px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; background:#f2f3f8; border:1px solid #e0e3ee; color:#5a6079; }
 #bt-schedule-app .ex-src.omg  { background:#e8eefc; border-color:#bfd0f4; color:#17398f; }
 #bt-schedule-app .ex-src.chip { background:#fdeaf5; border-color:#f3bedd; color:#9c1266; }
+#bt-schedule-app .ex-way { display:inline-block; margin-top:5px; padding:2px 9px; border-radius:4px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; background:#f2f3f8; border:1px solid #e0e3ee; color:#5a6079; }
+#bt-schedule-app .ex-way.pickup { background:#fff3e0; border-color:#f0c78a; color:#8a4b00; }
+#bt-schedule-app .ex-way.drop { background:#eef7ee; border-color:#c3e0c3; color:#1b5e20; }
 #bt-schedule-app .ex-none { color:#9ca3b8; font-style:italic; font-size:15px; }
 #bt-schedule-app .ex-pair { min-height:26px; margin-bottom:8px; }
 #bt-schedule-app .ex-pair:last-child { margin-bottom:0; }
@@ -3658,6 +3661,13 @@ function btRenderExchanges() {
       ? '<span class="ex-store">' + btEscHtml(x.store) + '</span>'
       : '<span class="ex-none">&mdash;</span>';
 
+    /* How it travels. Only the exceptions are badged — mail in and ship back
+       is the default and badging it would put a pill on every row. */
+    const m = x.methods || {};
+    let ways = '';
+    if (m.send === 'dropoff')   ways += '<div class="ex-way drop">Drop off</div> ';
+    if (m.return === 'pickup')  ways += '<div class="ex-way pickup">Pickup &mdash; do not ship</div>';
+
     /* The customer's own order number, and which platform it belongs to.
        9 digits from 1 is OrderMyGear, 7 digits from 8 is Chipply; the badge is
        left off rather than guessed when it is neither. */
@@ -3689,7 +3699,7 @@ function btRenderExchanges() {
     return '<tr style="' + dim + '">' +
       '<td><a href="' + btEscHtml(x.edit_url) + '" target="_blank" rel="noopener" style="color:#1a1f5e;font-weight:700;">#' + btEscHtml(x.number) + '</a>' +
         '<div style="font-size:14px;color:#9ca3b8;">' + dateStr + '</div>' +
-        '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.woo_status_lbl) + '</div></td>' +
+        '<div style="font-size:14px;color:#5a6380;">' + btEscHtml(x.woo_status_lbl) + '</div>' + ways + '</td>' +
       '<td>' + origCell + '</td>' +
       '<td><div style="font-weight:600;">' + btEscHtml(x.customer) + '</div>' +
         '<a href="mailto:' + btEscHtml(x.email) + '" style="color:#1a1f5e;font-size:14px;">' + btEscHtml(x.email) + '</a>' +

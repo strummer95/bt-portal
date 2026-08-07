@@ -275,6 +275,28 @@ function btp_exchange_meta_label( $key ) {
 }
 
 /**
+ * How the exchange travels, in each direction. Read off the order, falling back
+ * to the shipping line, then to the old defaults: everything placed before the
+ * customer got a choice was mail in, ship back.
+ */
+function btp_exchange_methods( $order ) {
+    $send   = (string) $order->get_meta( '_bt_send_method' );
+    $return = (string) $order->get_meta( '_bt_return_method' );
+
+    if ( $send === '' || $return === '' ) {
+        foreach ( btp_exchange_line_meta( $order ) as $m ) {
+            if ( $m['key'] === '_bt_send_method' )   { if ( $send === '' )   $send   = $m['value']; }
+            if ( $m['key'] === '_bt_return_method' ) { if ( $return === '' ) $return = $m['value']; }
+        }
+    }
+
+    if ( ! in_array( $send, array( 'mail', 'dropoff' ), true ) )  $send   = 'mail';
+    if ( ! in_array( $return, array( 'ship', 'pickup' ), true ) ) $return = 'ship';
+
+    return array( 'send' => $send, 'return' => $return );
+}
+
+/**
  * Which platform the customer's original order number came from.
  *
  * The two stores Boomer T's runs against number their orders differently and
@@ -561,7 +583,7 @@ function btp_exchange_payload( $order ) {
        were no item rows to show — the order number and the school name
        repeated one column to the right of themselves. */
     $extra = array_values( array_filter( $extra, function( $m ) {
-        return ! preg_match( '/original\s*order|order\s*(number|#|no\b)|school|team|store|organi[sz]ation|group/i', $m['key'] );
+        return ! preg_match( '/original\s*order|order\s*(number|#|no\b)|school|team|store|organi[sz]ation|group|sending\s*items|new\s*items\s*back/i', $m['key'] );
     } ) );
 
     return array(
@@ -592,6 +614,9 @@ function btp_exchange_payload( $order ) {
         // original order more often than anything else on the row.
         'original_order' => $request['original_order'],
         'source'         => btp_exchange_source( $request['original_order'] ),
+        // Mail in or drop off, ship back or hold for pickup. Staff need this at
+        // a glance — a finished pickup exchange must not go in a mailer.
+        'methods'        => btp_exchange_methods( $order ),
         'extra'         => $extra,
         'edit_url'      => $order->get_edit_order_url(),
         'items'         => $items,
