@@ -38,6 +38,13 @@ function btp_admin_page() {
     $ex_count     = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}bt_exchanges");
     $ex_pid       = btp_exchange_product_id();
 
+    if ( isset($_POST['btp_redirect_cap']) && check_admin_referer('btp_save_settings') ) {
+        $cap = sanitize_text_field( wp_unslash($_POST['btp_redirect_cap']) );
+        if ( in_array($cap, array('edit_posts','publish_posts','manage_options','read'), true) ) {
+            update_option('btp_redirect_cap', $cap);
+        }
+    }
+
     if ( isset($_POST['btp_brand_logo']) && check_admin_referer('btp_save_settings') ) {
         update_option('btp_brand_logo', esc_url_raw( wp_unslash($_POST['btp_brand_logo']) ));
         update_option('btp_brand_navy', sanitize_hex_color( wp_unslash($_POST['btp_brand_navy']) ) ?: '');
@@ -71,6 +78,30 @@ function btp_admin_page() {
         <input type="number" min="1" step="1" id="btp_exchange_product_id" name="btp_exchange_product_id"
                value="<?php echo esc_attr($ex_pid); ?>" style="width:120px;margin:0 8px;">
         <?php submit_button('Save', 'secondary', 'submit', false); ?>
+      </form>
+
+      <h2>Redirect access</h2>
+      <p style="max-width:640px;">Everything else in the portal is open to anyone who can load the page. The Redirect
+        tool creates real published pages on the site, so it asks for a capability. Pick the lowest one that covers
+        the people who actually need it.</p>
+      <form method="post" style="margin-bottom:24px;">
+        <?php wp_nonce_field('btp_save_settings'); ?>
+        <select name="btp_redirect_cap">
+          <?php
+          $caps = array(
+            'read'          => 'Any signed-in user (Subscriber and up)',
+            'edit_posts'    => 'Contributor and up — default',
+            'publish_posts' => 'Author and up',
+            'manage_options'=> 'Administrators only',
+          );
+          $cur = btp_redirect_capability();
+          foreach ( $caps as $k => $label ) {
+              printf('<option value="%s"%s>%s</option>', esc_attr($k), selected($cur, $k, false), esc_html($label));
+          }
+          ?>
+        </select>
+        <?php submit_button('Save', 'secondary', 'submit_cap', false); ?>
+        <p class="description">Signed-out visitors are never given access, whatever this is set to.</p>
       </form>
 
       <h2>Customer email branding</h2>

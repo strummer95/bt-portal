@@ -103,12 +103,38 @@ function btp_redirect_chipply_listener() {
     exit;
 }
 
+/**
+ * Who may use the Redirect tool.
+ *
+ * The rest of the portal is open to anyone who can load the page — it reads
+ * and writes the shop's own job board. Redirect is different: it creates real
+ * published WordPress pages, so it stays behind a capability.
+ *
+ * edit_posts by default, which is Contributor and up. Configurable because the
+ * people who need it are front-desk staff, not editors, and the alternative is
+ * handing someone a bigger role than they need just to make a store link.
+ */
+function btp_redirect_capability() {
+    $allowed = array('edit_posts', 'publish_posts', 'manage_options', 'read');
+    $cap = (string) get_option('btp_redirect_cap', 'edit_posts');
+    if (!in_array($cap, $allowed, true)) $cap = 'edit_posts';
+    return apply_filters('btp_redirect_capability', $cap);
+}
+
+/** Logged out and "logged in but not permitted" are different problems. */
+function btp_redirect_denied_html() {
+    $msg = is_user_logged_in()
+        ? 'Your account doesn\'t have permission to use the Redirect tool. Ask Dillon to grant it &mdash; it\'s a one-line change under Users, or under BT Portal &rarr; Redirect access.'
+        : 'You\'re not signed in to boomerts.com. Log in and reload this page &mdash; the Redirect tool needs to know who you are, because it creates real pages on the site.';
+    return '<div style="padding:30px;text-align:center;color:#5a6380;font-family:Barlow,sans-serif;font-size:16px;line-height:1.6;max-width:520px;margin:0 auto;">' . $msg . '</div>';
+}
+
 /* ============================================================
  * 2. AJAX HANDLERS
  * ============================================================ */
 add_action('wp_ajax_bt_redirect_create', 'btp_redirect_ajax_create');
 function btp_redirect_ajax_create() {
-    if (!current_user_can('edit_posts')) {
+    if (!current_user_can(btp_redirect_capability())) {
         wp_send_json_error(array('message' => 'Permission denied.'));
     }
     check_ajax_referer('bt_redirect_nonce', 'nonce');
@@ -167,7 +193,7 @@ function btp_redirect_ajax_create() {
 
 add_action('wp_ajax_bt_redirect_update', 'btp_redirect_ajax_update');
 function btp_redirect_ajax_update() {
-    if (!current_user_can('edit_posts')) {
+    if (!current_user_can(btp_redirect_capability())) {
         wp_send_json_error(array('message' => 'Permission denied.'));
     }
     check_ajax_referer('bt_redirect_nonce', 'nonce');
@@ -197,7 +223,7 @@ function btp_redirect_ajax_update() {
 
 add_action('wp_ajax_bt_redirect_delete', 'btp_redirect_ajax_delete');
 function btp_redirect_ajax_delete() {
-    if (!current_user_can('edit_posts')) {
+    if (!current_user_can(btp_redirect_capability())) {
         wp_send_json_error(array('message' => 'Permission denied.'));
     }
     check_ajax_referer('bt_redirect_nonce', 'nonce');
@@ -261,8 +287,8 @@ function btp_redirect_get_all() {
  * ============================================================ */
 add_shortcode('bt_redirect_tab', 'btp_redirect_tab_shortcode');
 function btp_redirect_tab_shortcode() {
-    if (!current_user_can('edit_posts')) {
-        return '<div style="padding:30px;text-align:center;color:#9ca3b8;font-family:Barlow,sans-serif;">You do not have permission to use this tool.</div>';
+    if (!current_user_can(btp_redirect_capability())) {
+        return btp_redirect_denied_html();
     }
 
     // Make sure the parent page exists when the tab is opened
