@@ -1622,7 +1622,7 @@ function btNormalizeJob(j) {
   }
   const garmentType = j.garment_type||j.garmentType||'';
   lineItems = lineItems.map(li => ({...li, garment: li.garment || garmentType}));
-  return { id:j.id, orderNum:j.order_num||j.orderNum||'', customer:j.customer||'', qty:parseInt(j.qty)||0, location, lineItems, garmentType, createdBy:j.created_by||j.createdBy||'', dept:j.dept||'', status:j.status||'None', dueDate:j.due_date||j.dueDate||'', artLink:j.art_link||j.artLink||'', notes:j.notes||'', caution: j.caution == 1, wooOrderId: parseInt(j.woo_order_id)||0, wooCompletedAt: j.woo_completed_at||'', wooCompletedBy: j.woo_completed_by||'' };
+  return { id:j.id, orderNum:j.order_num||j.orderNum||'', customer:j.customer||'', qty:parseInt(j.qty)||0, location, lineItems, garmentType, createdBy:j.created_by||j.createdBy||'', dept:j.dept||'', status:j.status||'None', dueDate:j.due_date||j.dueDate||'', artLink:j.art_link||j.artLink||'', notes:j.notes||'', caution: j.caution == 1, sortOrder: parseInt(j.sort_order||j.sortOrder)||0, wooOrderId: parseInt(j.woo_order_id)||0, wooCompletedAt: j.woo_completed_at||'', wooCompletedBy: j.woo_completed_by||'' };
 }
 
 function btNormalizeStore(s) {
@@ -1773,7 +1773,8 @@ function btRenderBoard() {
       const sorted = [...dayJobs].sort((a,b) => {
         const aC = a.status==='Complete/Notify Customer' ? 1 : 0;
         const bC = b.status==='Complete/Notify Customer' ? 1 : 0;
-        return aC - bC;
+        if (aC !== bC) return aC - bC;
+        return (a.sortOrder||0) - (b.sortOrder||0) || (a.id - b.id);
       });
       sorted.forEach(job => cc.appendChild(btBuildCard(job)));
       btInitDrag(cc);
@@ -3174,6 +3175,7 @@ async function btToggleCaution(jobId) {
 }
 
 /* ── DRAG TO REORDER ── */
+let btDragSaving = false;
 function btInitDrag(container) {
   let draggedCard = null;
 
@@ -3186,24 +3188,30 @@ function btInitDrag(container) {
 
     card.addEventListener('dragstart', e => {
       draggedCard = card;
-      card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(card.dataset.id||'')); } catch(err) {}
+      setTimeout(() => card.classList.add('dragging'), 0);
     });
 
     card.addEventListener('dragend', async () => {
-      card.classList.remove('dragging');
       card.draggable = false;
       container.classList.remove('drag-over');
-      const ids = [...container.querySelectorAll('.job-card')].map(c => parseInt(c.dataset.id));
       const allIds = [...document.querySelectorAll('#btBoard .job-card')].map(c => parseInt(c.dataset.id));
+      // Apply the new order locally first, so any render before the save lands keeps it
+      const orderMap = {};
+      allIds.forEach((id, i) => orderMap[id] = i + 1);
+      btJobs.forEach(j => { if (orderMap[j.id]) j.sortOrder = orderMap[j.id]; });
+      btDragSaving = true;
       btSaving(true);
       try {
         await btFetch('/jobs/sort', 'POST', {order: allIds});
-        const orderMap = {};
-        allIds.forEach((id, i) => orderMap[id] = i + 1);
-        btJobs.forEach(j => { if (orderMap[j.id]) j.sortOrder = orderMap[j.id]; });
-      } catch(e) { console.error('Sort save error:', e); }
+      } catch(e) {
+        console.error('Sort save error:', e);
+        alert('Could not save the new order. It will revert on the next refresh.');
+      }
       btSaving(false);
+      btDragSaving = false;
+      card.classList.remove('dragging');
       draggedCard = null;
     });
   });
@@ -3221,7 +3229,7 @@ function btInitDrag(container) {
   container.addEventListener('drop', e => { e.preventDefault(); container.classList.remove('drag-over'); });
 
   function getDragAfterEl(cont, y) {
-    const els = [...cont.querySelectorAll('.job-card:not(.dragging)')];
+    const els = [...cont.querySelectorAll('.job-card')].filter(el => el !== draggedCard);
     return els.reduce((closest, el) => {
       const box = el.getBoundingClientRect();
       const offset = y - box.top - box.height / 2;
@@ -3823,6 +3831,7 @@ async function btSaveExchange(orderId, patch) {
     if (document.getElementById('btpJobModalOverlay').classList.contains('open')) return;
     if (document.getElementById('btStoreModalOverlay').classList.contains('open')) return;
     if (document.querySelector('.job-card.dragging')) return;
+    if (btDragSaving) return;
     if (document.activeElement && document.activeElement.classList.contains('day-note-input')) return;
     try {
       await Promise.all([btLoadJobs(), btLoadDayNotes(), btLoadClosedDays()]);
