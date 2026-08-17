@@ -28,6 +28,8 @@ function btp_tab_map() {
         'redirect'      => 'redirect',
         'contacts'      => 'contacts',
         'exchanges'     => 'exchanges',
+        'omg-scanner'   => 'omgscan',
+        'scanner'       => 'omgscan',    // convenience alias
     ) );
 }
 
@@ -40,6 +42,7 @@ function btp_tab_slugs() {
         'redirect'  => 'redirect',
         'contacts'  => 'contacts',
         'exchanges' => 'exchanges',
+        'omgscan'   => 'omg-scanner',
     );
 }
 
