@@ -242,6 +242,28 @@ function btp_omg_scanner_shortcode() {
     t._t = setTimeout(function () { t.classList.remove('show'); }, 1600);
   }
 
+  /* The readout is derived from the list, never just written on scan. Clearing
+     the list or deleting the last row used to leave the last code stranded in
+     72px type with every counter reading zero. */
+  function showLast(code, dup) {
+    var big = $('omgLast');
+    if (code === null) {
+      big.textContent = 'Scan a code to begin';
+      big.classList.add('omg-empty');
+      $('omgDupFlag').classList.remove('on');
+      return;
+    }
+    big.textContent = code;
+    big.classList.remove('omg-empty');
+    $('omgDupFlag').classList.toggle('on', !!dup);
+  }
+
+  function syncLast() {
+    if (!scans.length) { showLast(null); return; }
+    var last = scans[scans.length - 1];
+    showLast(last.code, last.dup);
+  }
+
   function flash(dup) {
     var r = $('omgReadout');
     r.classList.remove('flash', 'flashdup');
@@ -256,9 +278,7 @@ function btp_omg_scanner_shortcode() {
 
     var dup = scans.some(function (s) { return s.code === code; });
 
-    $('omgLast').textContent = code;
-    $('omgLast').classList.remove('omg-empty');
-    $('omgDupFlag').classList.toggle('on', dup);
+    showLast(code, dup);
 
     if (dup && $('omgSkipDupes').checked) {
       flash(true); beep(320, 160);
@@ -360,7 +380,7 @@ function btp_omg_scanner_shortcode() {
       Array.prototype.forEach.call($('omgList').querySelectorAll('.omg-del'), function (b) {
         b.addEventListener('click', function () {
           scans.splice(parseInt(b.getAttribute('data-i'), 10), 1);
-          recount(); render(); save();
+          recount(); render(); syncLast(); save();
         });
       });
     }
@@ -404,7 +424,7 @@ function btp_omg_scanner_shortcode() {
   $('omgClear').addEventListener('click', function () {
     if (!scans.length) { toast('List is already empty'); return; }
     if (confirm('Clear all ' + scans.length + ' scans? This cannot be undone.')) {
-      scans = []; render(); save(); toast('List cleared');
+      scans = []; render(); syncLast(); save(); toast('List cleared');
     }
   });
 
@@ -419,7 +439,7 @@ function btp_omg_scanner_shortcode() {
   }
   $('omgPause').addEventListener('change', status);
 
-  load(); render(); status();
+  load(); render(); syncLast(); status();
 })();
 </script>
     <?php
