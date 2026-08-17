@@ -54,6 +54,7 @@ function btp_omg_scanner_shortcode() {
     <div class="omg-label">Last scan</div>
     <div class="omg-big omg-empty" id="omgLast">Scan a code to begin</div>
     <div class="omg-dupflag" id="omgDupFlag">Already scanned &mdash; see the list below</div>
+    <div class="omg-typing" id="omgTyping"></div>
   </div>
 
   <div class="omg-counts">
@@ -108,9 +109,11 @@ function btp_omg_scanner_shortcode() {
   <div id="omgList"></div>
 
   <p class="omg-hint">
-    Capture only runs while this tab is open, so scans on the Schedule board never land here.
-    Each code is committed on its own once the gun stops sending characters &mdash; codes with no
-    Enter or space at the end still register. Typing in either box above pauses capture until you click away.
+    Scan straight down a stack &mdash; a code from the gun commits itself the moment it lands, with
+    or without an Enter after it. Typing is slower, so a typed number stays on screen until you press
+    Enter, and Backspace or Escape fix it before it goes in. You can also paste a whole column of
+    numbers onto this page at once. Capture only runs while this tab is open, so scans on the Schedule
+    board never land here.
   </p>
 
   <div class="omg-toast" id="omgToast"></div>
@@ -141,6 +144,10 @@ function btp_omg_scanner_shortcode() {
 #bt-omg-scanner .omg-big.omg-empty { font-family:'Barlow',sans-serif; font-size:clamp(18px,3.4vw,26px); font-weight:500; letter-spacing:0; color:#9ca3b8; }
 #bt-omg-scanner .omg-dupflag { display:none; margin-top:12px; font-size:14px; font-weight:600; color:#d32f2f; }
 #bt-omg-scanner .omg-dupflag.on { display:block; }
+#bt-omg-scanner .omg-typing { display:none; margin-top:12px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:17px; font-weight:600; color:#5a6380; }
+#bt-omg-scanner .omg-typing.on { display:block; }
+#bt-omg-scanner .omg-typing b { color:#0f1240; letter-spacing:.02em; }
+#bt-omg-scanner .omg-typing i { font-style:normal; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#9ca3b8; margin-left:10px; }
 
 #bt-omg-scanner .omg-counts { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
 #bt-omg-scanner .omg-count { flex:1 1 140px; padding:13px 16px; background:#fff; border:1px solid #e8eaf0; border-radius:9px; }
@@ -199,7 +206,37 @@ function btp_omg_scanner_shortcode() {
   var KEY   = 'btOmgScans';
   var PANE  = 'bt-tab-omgscan';
   var scans = [];
-  var buf = '', idleTimer = null, lastKey = 0;
+  var buf = '', idleTimer = null, lastKey = 0, gaps = [];
+
+  /* A gun and a hand are both "the keyboard", but they arrive at very
+     different speeds: a gun emits its characters 5-20ms apart, a person types
+     at 150-250ms. Committing purely on an idle timeout served the gun and
+     silently ate anything typed, because each letter timed out alone and was
+     thrown away for being too short.
+
+     So the decision is made on the gaps between keystrokes, not on the pause
+     at the end. A burst auto-commits the moment it goes quiet, which is what
+     keeps scanning hands-free. Anything slower is treated as typing: it stays
+     on screen and waits for Enter. */
+  var STALE_MS = 2500;   // a gap this long starts a new code, not a continuation
+
+  function median(a) {
+    if (!a.length) return 0;
+    var v = a.slice().sort(function (x, y) { return x - y; });
+    var m = Math.floor(v.length / 2);
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  }
+  function idleGap()  { return parseInt($('omgGap').value, 10); }
+  function burstMax() { return Math.round(idleGap() * 0.6); }
+  function looksLikeGun() { return gaps.length >= 1 && median(gaps) <= burstMax(); }
+
+  function showTyping() {
+    var el = $('omgTyping');
+    if (!buf) { el.classList.remove('on'); el.innerHTML = ''; return; }
+    el.classList.add('on');
+    el.innerHTML = 'Typing <b>' + esc(buf) + '</b><i>Press Enter</i>';
+  }
+  function clearBuf() { buf = ''; gaps = []; showTyping(); }
 
   function $(id) { return document.getElementById(id); }
 
@@ -292,27 +329,64 @@ function btp_omg_scanner_shortcode() {
     render(); save();
   }
 
-  function flush() { if (buf) { var b = buf; buf = ''; commit(b); } }
+  function flush() {
+    if (!buf) return;
+    var b = buf;
+    clearBuf();
+    commit(b);
+  }
+
+  /* Fired when the keystrokes stop. Only a burst commits itself; typed input
+     stays put so it can be finished and sent with Enter. */
+  function onIdle() {
+    if (!buf) return;
+    if (looksLikeGun()) flush();
+    else showTyping();
+  }
 
   document.addEventListener('keydown', function (e) {
     if (!paneActive() || $('omgPause').checked) return;
     var t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;   // Ctrl+V is handled by the paste listener
 
     if (e.key === 'Enter' || e.key === 'Tab') {
       if (buf) { e.preventDefault(); clearTimeout(idleTimer); flush(); }
       return;
     }
+    if (e.key === 'Escape') { clearTimeout(idleTimer); clearBuf(); return; }
+    if (e.key === 'Backspace') {
+      if (buf) { e.preventDefault(); buf = buf.slice(0, -1); gaps.pop(); showTyping(); }
+      return;
+    }
     if (e.key.length !== 1) return;
 
     var now = Date.now();
-    if (now - lastKey > 900) buf = '';   // long pause: a new code is starting
+    if (buf && now - lastKey > STALE_MS) clearBuf();
+    if (buf) gaps.push(now - lastKey);
     lastKey = now;
     buf += e.key;
+    showTyping();
 
     clearTimeout(idleTimer);
-    idleTimer = setTimeout(flush, parseInt($('omgGap').value, 10));
+    idleTimer = setTimeout(onIdle, idleGap());
+  });
+
+  /* Pasting a column of numbers straight onto the page: split on whitespace,
+     commas or semicolons and take them all. */
+  document.addEventListener('paste', function (e) {
+    if (!paneActive() || $('omgPause').checked) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    var txt = (e.clipboardData || window.clipboardData);
+    if (!txt) return;
+    txt = txt.getData('text') || '';
+    var parts = txt.split(/[\s,;]+/).filter(function (x) { return x.length > 1; });
+    if (!parts.length) return;
+    e.preventDefault();
+    clearTimeout(idleTimer); clearBuf();
+    parts.forEach(commit);
+    toast('Added ' + parts.length + ' from paste');
   });
 
   $('omgManual').addEventListener('keydown', function (e) {
