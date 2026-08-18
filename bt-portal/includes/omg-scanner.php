@@ -50,6 +50,11 @@ function btp_omg_scanner_shortcode() {
     </div>
   </div>
 
+  <div class="omg-notice">
+    <strong>Pickup orders only.</strong> OMG can only bulk process pickups, so a shipping order scanned
+    here won&rsquo;t go through with the batch.
+  </div>
+
   <div class="omg-readout" id="omgReadout">
     <div class="omg-label">Last scan</div>
     <div class="omg-big omg-empty" id="omgLast">Scan a code to begin</div>
@@ -133,9 +138,12 @@ function btp_omg_scanner_shortcode() {
 #bt-omg-scanner .omg-status.paused .omg-dot { background:#9ca3b8; animation:none; }
 @keyframes omgPulse { 0%{box-shadow:0 0 0 0 rgba(46,125,50,.5)} 70%{box-shadow:0 0 0 8px rgba(46,125,50,0)} 100%{box-shadow:0 0 0 0 rgba(46,125,50,0)} }
 
+#bt-omg-scanner .omg-notice { margin-top:18px; padding:13px 16px; background:#fff8e6; border:1px solid #f0d9a0; border-left:4px solid #FFC53D; border-radius:9px; font-size:14.5px; line-height:1.55; color:#6b5410; }
+#bt-omg-scanner .omg-notice strong { color:#4a3a08; font-weight:700; }
+
 #bt-omg-scanner .omg-label { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:#9ca3b8; }
 
-#bt-omg-scanner .omg-readout { position:relative; overflow:hidden; margin:20px 0 0; padding:24px 24px 26px; background:#fff; border:1px solid #e8eaf0; border-radius:10px; box-shadow:0 1px 3px rgba(26,31,94,.06); }
+#bt-omg-scanner .omg-readout { position:relative; overflow:hidden; margin:12px 0 0; padding:24px 24px 26px; background:#fff; border:1px solid #e8eaf0; border-radius:10px; box-shadow:0 1px 3px rgba(26,31,94,.06); }
 #bt-omg-scanner .omg-readout::after { content:""; position:absolute; inset:0; pointer-events:none; opacity:0; background:#2E7D32; }
 #bt-omg-scanner .omg-readout.flash::after { animation:omgFlash .45s ease-out; }
 #bt-omg-scanner .omg-readout.flashdup::after { background:#d32f2f; animation:omgFlash .45s ease-out; }
