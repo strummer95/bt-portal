@@ -73,9 +73,32 @@ function btp_omg_scanner_shortcode() {
     <div class="omg-count rep"><div class="omg-n" id="omgRepeats">0</div><div class="omg-l">Repeats</div></div>
   </div>
 
+
   <div class="omg-panel">
     <div class="omg-panelhead">
-      <div class="omg-label">Paste-ready</div>
+      <div class="omg-label">Open in OMG</div>
+      <label class="omg-opt">Per batch
+        <select id="omgBatch">
+          <option value="40">40</option>
+          <option value="60" selected>60</option>
+          <option value="80">80</option>
+        </select>
+      </label>
+    </div>
+    <div id="omgLinks" class="omg-links"></div>
+    <div class="omg-row">
+      <button type="button" class="omg-btn danger" id="omgClear">Clear all</button>
+    </div>
+  </div>
+
+  </div><!-- /omg-core -->
+
+  <details class="omg-extras">
+    <summary>Settings and full list</summary>
+
+  <div class="omg-panel">
+    <div class="omg-panelhead">
+      <div class="omg-label">Paste-ready &mdash; if you’d rather copy the numbers</div>
       <label class="omg-opt">Separator
         <select id="omgSep">
           <option value="space" selected>Space</option>
@@ -92,14 +115,8 @@ function btp_omg_scanner_shortcode() {
       <button type="button" class="omg-btn primary" id="omgCopy">Copy this</button>
       <button type="button" class="omg-btn" id="omgSelect">Select all</button>
       <button type="button" class="omg-btn" id="omgCsv">Download CSV</button>
-      <button type="button" class="omg-btn danger" id="omgClear">Clear all</button>
     </div>
   </div>
-
-  </div><!-- /omg-core -->
-
-  <details class="omg-extras">
-    <summary>Settings and full list</summary>
 
   <div class="omg-settings">
     <label class="omg-opt"><input type="checkbox" id="omgSound" checked> Beep on scan</label>
@@ -140,9 +157,10 @@ function btp_omg_scanner_shortcode() {
      <ol class="omg-steps">
        <li>Scan your <b>pickup</b> slips, one after another.</li>
        <li>Check the <b>Orders</b> count matches your pile.</li>
-       <li>Press <b>Copy this</b>.</li>
-       <li>Paste into the order box in OMG.</li>
-       <li>Press <b>Clear all</b>.</li>
+       <li>Click <b>Open in OMG</b>.</li>
+       <li>Check the box at the top of the list to select all.</li>
+       <li>Bulk process the orders.</li>
+       <li>Come back and press <b>Clear all</b>.</li>
      </ol>
      <div class="omg-guidefoot">
        Pickup orders only &mdash; shipping orders won&rsquo;t go through with the batch.
@@ -223,6 +241,13 @@ function btp_omg_scanner_shortcode() {
 #bt-omg-scanner .omg-count.rep .omg-n { color:#d32f2f; }
 #bt-omg-scanner .omg-l { margin-top:6px; font-family:'Barlow Condensed',sans-serif; font-size:12px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:#9ca3b8; }
 
+#bt-omg-scanner .omg-links { display:flex; flex-direction:column; gap:8px; }
+#bt-omg-scanner .omg-open { display:flex; align-items:center; gap:12px; padding:13px 16px; background:#1a1f5e; color:#fff; border-radius:9px; text-decoration:none; transition:background .15s; }
+#bt-omg-scanner .omg-open:hover { background:#232875; color:#fff; }
+#bt-omg-scanner .omg-open:focus-visible { outline:2px solid #e91e8c; outline-offset:2px; }
+#bt-omg-scanner .omg-openlabel { font-family:'Barlow Condensed',sans-serif; font-size:15px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+#bt-omg-scanner .omg-opencount { margin-left:auto; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; opacity:.75; }
+#bt-omg-scanner .omg-none { padding:26px 18px; text-align:center; font-size:15px; color:#9ca3b8; background:#f4f5f9; border:1px dashed #e8eaf0; border-radius:9px; }
 #bt-omg-scanner .omg-panel { margin-top:18px; padding:17px 18px; background:#fff; border:1px solid #e8eaf0; border-radius:10px; }
 #bt-omg-scanner .omg-panelhead { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:11px; }
 #bt-omg-scanner .omg-panelhead .omg-opt:first-of-type { margin-left:auto; }
@@ -463,6 +488,54 @@ function btp_omg_scanner_shortcode() {
     }
   });
 
+  /* OMG's own order search takes the numbers straight off the query string —
+     space separated in the box, which encodes as + in the URL:
+
+       app.ordermygear.com/global/orders/?q=188482361+188481818+188479955
+
+     So the same list that used to be copied and pasted can just be a link. */
+  var OMG_BASE = 'https://app.ordermygear.com/global/orders/?q=';
+  var MAX_URL  = 1900;
+
+  function uniqueCodes() {
+    var seen = {}, out = [];
+    scans.forEach(function (s) { if (!seen[s.code]) { seen[s.code] = true; out.push(s.code); } });
+    return out;
+  }
+  /* Split by batch size, and again by URL length — a truncated link would drop
+     the orders on the end without saying so. */
+  function batches() {
+    var codes = uniqueCodes(), per = parseInt($('omgBatch').value, 10);
+    var out = [], cur = [];
+    for (var i = 0; i < codes.length; i++) {
+      var next = cur.concat([codes[i]]);
+      if (cur.length && (next.length > per || (OMG_BASE + next.join('+')).length > MAX_URL)) {
+        out.push(cur); cur = [codes[i]];
+      } else cur = next;
+    }
+    if (cur.length) out.push(cur);
+    return out;
+  }
+  function urlFor(list) { return OMG_BASE + list.join('+'); }
+
+  function renderLinks() {
+    var b = batches(), host = $('omgLinks');
+    if (!b.length) {
+      host.innerHTML = '<div class="omg-none">Scan some orders and a link to OMG appears here.</div>';
+      return;
+    }
+    var h = '';
+    for (var i = 0; i < b.length; i++) {
+      var label = b.length === 1
+        ? 'Open ' + b[i].length + ' order' + (b[i].length === 1 ? '' : 's') + ' in OMG'
+        : 'Open batch ' + (i + 1) + ' of ' + b.length;
+      h += '<a class="omg-open" href="' + esc(urlFor(b[i])) + '" target="_blank" rel="noopener">' +
+             '<span class="omg-openlabel">' + label + '</span>' +
+             '<span class="omg-opencount">' + b[i].length + ' orders</span></a>';
+    }
+    host.innerHTML = h;
+  }
+
   var SEPS = { space: ' ', newline: '\n', comma: ',', tab: '\t' };
   function codes() { return scans.map(function (s) { return s.code; }); }
   function outText() {
@@ -471,7 +544,7 @@ function btp_omg_scanner_shortcode() {
     if (txt && $('omgTrailing').checked) txt += sep;
     return txt;
   }
-  function renderOut() { $('omgOut').value = outText(); }
+  function renderOut() { $('omgOut').value = outText(); renderLinks(); }
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -569,6 +642,7 @@ function btp_omg_scanner_shortcode() {
     }
   });
 
+  $('omgBatch').addEventListener('change', renderLinks);
   $('omgSep').addEventListener('change', renderOut);
   $('omgTrailing').addEventListener('change', renderOut);
   $('omgFind').addEventListener('input', render);
