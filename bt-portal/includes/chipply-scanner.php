@@ -129,8 +129,8 @@ function btp_chipply_scanner_shortcode() {
        <li>Scan your slips, one after another.</li>
        <li>Check the <b>Orders</b> count matches your pile.</li>
        <li>Click <b>Open in Chipply</b>.</li>
-       <li>Tick the box at the top of the list.</li>
-       <li>Print labels, or change the status.</li>
+       <li>Check the box at the top of the list to select all.</li>
+       <li>Send to ShipStation, message customers, and/or update status on all orders.</li>
        <li>Come back and press <b>Clear all</b>.</li>
      </ol>
      <div class="cs-guidefoot">
