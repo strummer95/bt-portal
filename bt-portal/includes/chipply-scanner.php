@@ -48,6 +48,9 @@ function btp_chipply_scanner_shortcode() {
     <div class="cs-status live" id="csStatus"><span class="cs-dot"></span><span id="csStatusText">Listening</span></div>
   </div>
 
+  <div class="cs-layout">
+   <div class="cs-main">
+
   <div class="cs-readout" id="csReadout">
     <div class="cs-label">Last scan</div>
     <div class="cs-big cs-empty" id="csLast">Scan a Chipply slip to begin</div>
@@ -109,6 +112,29 @@ function btp_chipply_scanner_shortcode() {
     runs while this tab is open.
   </p>
 
+   </div><!-- /cs-main -->
+
+   <aside class="cs-guide">
+     <div class="cs-guidetitle">How to do this</div>
+     <ol class="cs-steps">
+       <li>Get your Chipply slips ready.</li>
+       <li>Scan them one after another.
+           <span class="cs-said">No need to touch the keyboard. Each one beeps.</span></li>
+       <li>A <b>red flash</b> means you already scanned that one.
+           <span class="cs-said">It was skipped. Just carry on.</span></li>
+       <li>Check the <b>Orders</b> count matches your pile.</li>
+       <li>Click the blue <b>Open in Chipply</b> button.
+           <span class="cs-said">Chipply opens in a new tab with only your orders.</span></li>
+       <li>Tick the box at the <b>top of the list</b> to select them all.</li>
+       <li>Print your labels, or change the status.</li>
+       <li>Come back here and press <b>Clear all</b>.</li>
+     </ol>
+     <div class="cs-guidefoot">
+       <b>More than one button?</b> Big piles get split up. Do the first one, come back, then do the next.
+     </div>
+   </aside>
+  </div><!-- /cs-layout -->
+
   <div class="cs-toast" id="csToast"></div>
 </div>
 
@@ -124,6 +150,24 @@ function btp_chipply_scanner_shortcode() {
 #bt-chipscan .cs-status.paused { color:#9ca3b8; }
 #bt-chipscan .cs-status.paused .cs-dot { background:#9ca3b8; animation:none; }
 @keyframes csPulse { 0%{box-shadow:0 0 0 0 rgba(46,125,50,.5)} 70%{box-shadow:0 0 0 8px rgba(46,125,50,0)} 100%{box-shadow:0 0 0 0 rgba(46,125,50,0)} }
+
+
+/* ---- side-by-side guide ---- */
+#bt-chipscan .cs-layout { display:grid; grid-template-columns:1fr 300px; gap:20px; align-items:start; }
+#bt-chipscan .cs-guide { position:sticky; top:16px; padding:20px 20px 22px; background:#fff; border:1px solid #e8eaf0; border-radius:11px; box-shadow:0 1px 3px rgba(26,31,94,.06); }
+#bt-chipscan .cs-guidetitle { font-family:'Oswald',sans-serif; font-size:16px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:#1a1f5e; padding-bottom:12px; margin-bottom:4px; border-bottom:2px solid #e91e8c; }
+#bt-chipscan .cs-steps { list-style:none; counter-reset:step; }
+#bt-chipscan .cs-steps li { counter-increment:step; position:relative; padding:13px 0 13px 40px; border-bottom:1px solid #f0f2f7; font-size:15px; line-height:1.5; color:#1a1f5e; }
+#bt-chipscan .cs-steps li:last-child { border-bottom:none; padding-bottom:2px; }
+#bt-chipscan .cs-steps li::before { content:counter(step); position:absolute; left:0; top:12px; width:26px; height:26px; border-radius:50%; background:#1a1f5e; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+#bt-chipscan .cs-steps b { font-weight:700; }
+#bt-chipscan .cs-steps .cs-said { display:block; margin-top:3px; font-size:13.5px; color:#8b93a8; }
+#bt-chipscan .cs-guidefoot { margin-top:16px; padding-top:14px; border-top:1px solid #f0f2f7; font-size:13.5px; line-height:1.55; color:#8b93a8; }
+#bt-chipscan .cs-guidefoot b { color:#1a1f5e; }
+@media (max-width:900px) {
+  #bt-chipscan .cs-layout { grid-template-columns:1fr; }
+  #bt-chipscan .cs-guide { position:static; order:-1; }
+}
 
 #bt-chipscan .cs-label { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:#9ca3b8; }
 #bt-chipscan .cs-readout { position:relative; overflow:hidden; margin:20px 0 12px; padding:24px; background:#fff; border:1px solid #e8eaf0; border-radius:10px; box-shadow:0 1px 3px rgba(26,31,94,.06); }

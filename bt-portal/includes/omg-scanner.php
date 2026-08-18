@@ -50,6 +50,9 @@ function btp_omg_scanner_shortcode() {
     </div>
   </div>
 
+  <div class="omg-layout">
+   <div class="omg-main">
+
   <div class="omg-notice">
     <strong>Pickup orders only.</strong> OMG can only bulk process pickups, so a shipping order scanned
     here won&rsquo;t go through with the batch.
@@ -121,6 +124,28 @@ function btp_omg_scanner_shortcode() {
     board never land here.
   </p>
 
+   </div><!-- /omg-main -->
+
+   <aside class="omg-guide">
+     <div class="omg-guidetitle">How to do this</div>
+     <ol class="omg-steps">
+       <li>Get your <b>pickup</b> slips ready.
+           <span class="omg-said">Shipping orders don&rsquo;t work here.</span></li>
+       <li>Scan them one after another.
+           <span class="omg-said">No need to touch the keyboard. Each one beeps.</span></li>
+       <li>A <b>red flash</b> means you already scanned that one.
+           <span class="omg-said">It was skipped. Just carry on.</span></li>
+       <li>Check the <b>Orders</b> count matches your pile.</li>
+       <li>Press <b>Copy this</b>.</li>
+       <li>Go to OMG and paste into the order box.</li>
+       <li>Come back and press <b>Clear all</b> before the next pile.</li>
+     </ol>
+     <div class="omg-guidefoot">
+       <b>Stuck?</b> If nothing happens when you scan, click once on this page first, then scan again.
+     </div>
+   </aside>
+  </div><!-- /omg-layout -->
+
   <div class="omg-toast" id="omgToast"></div>
 </div>
 
@@ -140,6 +165,24 @@ function btp_omg_scanner_shortcode() {
 
 #bt-omg-scanner .omg-notice { margin-top:18px; padding:13px 16px; background:#fff8e6; border:1px solid #f0d9a0; border-left:4px solid #FFC53D; border-radius:9px; font-size:14.5px; line-height:1.55; color:#6b5410; }
 #bt-omg-scanner .omg-notice strong { color:#4a3a08; font-weight:700; }
+
+
+/* ---- side-by-side guide ---- */
+#bt-omg-scanner .omg-layout { display:grid; grid-template-columns:1fr 300px; gap:20px; align-items:start; }
+#bt-omg-scanner .omg-guide { position:sticky; top:16px; padding:20px 20px 22px; background:#fff; border:1px solid #e8eaf0; border-radius:11px; box-shadow:0 1px 3px rgba(26,31,94,.06); }
+#bt-omg-scanner .omg-guidetitle { font-family:'Oswald',sans-serif; font-size:16px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:#1a1f5e; padding-bottom:12px; margin-bottom:4px; border-bottom:2px solid #e91e8c; }
+#bt-omg-scanner .omg-steps { list-style:none; counter-reset:step; }
+#bt-omg-scanner .omg-steps li { counter-increment:step; position:relative; padding:13px 0 13px 40px; border-bottom:1px solid #f0f2f7; font-size:15px; line-height:1.5; color:#1a1f5e; }
+#bt-omg-scanner .omg-steps li:last-child { border-bottom:none; padding-bottom:2px; }
+#bt-omg-scanner .omg-steps li::before { content:counter(step); position:absolute; left:0; top:12px; width:26px; height:26px; border-radius:50%; background:#1a1f5e; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+#bt-omg-scanner .omg-steps b { font-weight:700; }
+#bt-omg-scanner .omg-steps .omg-said { display:block; margin-top:3px; font-size:13.5px; color:#8b93a8; }
+#bt-omg-scanner .omg-guidefoot { margin-top:16px; padding-top:14px; border-top:1px solid #f0f2f7; font-size:13.5px; line-height:1.55; color:#8b93a8; }
+#bt-omg-scanner .omg-guidefoot b { color:#1a1f5e; }
+@media (max-width:900px) {
+  #bt-omg-scanner .omg-layout { grid-template-columns:1fr; }
+  #bt-omg-scanner .omg-guide { position:static; order:-1; }
+}
 
 #bt-omg-scanner .omg-label { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:#9ca3b8; }
 
