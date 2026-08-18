@@ -51,6 +51,8 @@ function btp_chipply_scanner_shortcode() {
   <div class="cs-layout">
    <div class="cs-main">
 
+  <div class="cs-core">
+
   <div class="cs-readout" id="csReadout">
     <div class="cs-label">Last scan</div>
     <div class="cs-big cs-empty" id="csLast">Scan a Chipply slip to begin</div>
@@ -83,6 +85,11 @@ function btp_chipply_scanner_shortcode() {
     </div>
   </div>
 
+  </div><!-- /cs-core -->
+
+  <details class="cs-extras">
+    <summary>Settings and full list</summary>
+
   <div class="cs-settings">
     <label class="cs-opt"><input type="checkbox" id="csSound" checked> Beep on scan</label>
     <label class="cs-opt"><input type="checkbox" id="csSkipDupes" checked> Ignore repeat scans</label>
@@ -111,6 +118,8 @@ function btp_chipply_scanner_shortcode() {
     because an over-long link gets truncated, which would quietly drop orders off the end. Capture only
     runs while this tab is open.
   </p>
+
+  </details>
 
    </div><!-- /cs-main -->
 
@@ -163,6 +172,18 @@ function btp_chipply_scanner_shortcode() {
   #bt-chipscan .cs-layout { grid-template-columns:1fr; }
   #bt-chipscan .cs-guide { position:static; order:-1; }
 }
+
+
+/* ---- the working set, and everything else ---- */
+#bt-chipscan .cs-core { padding:16px; background:#fff; border:1px solid #dfe3ed; border-radius:13px; box-shadow:0 2px 10px rgba(26,31,94,.07); }
+#bt-chipscan .cs-core > *:first-child { margin-top:0; }
+#bt-chipscan .cs-extras { margin-top:16px; }
+#bt-chipscan .cs-extras > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:9px; padding:11px 15px; background:transparent; border:1px dashed #d6dbe8; border-radius:9px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:#9ca3b8; transition:all .15s; }
+#bt-chipscan .cs-extras > summary::-webkit-details-marker { display:none; }
+#bt-chipscan .cs-extras > summary:hover { color:#5a6380; border-color:#b9c1d3; }
+#bt-chipscan .cs-extras > summary::after { content:"+"; margin-left:auto; font-size:17px; font-weight:400; line-height:1; }
+#bt-chipscan .cs-extras[open] > summary::after { content:"\2212"; }
+#bt-chipscan .cs-extras[open] > summary { margin-bottom:4px; }
 
 #bt-chipscan .cs-label { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:#9ca3b8; }
 #bt-chipscan .cs-readout { position:relative; overflow:hidden; margin:20px 0 12px; padding:24px; background:#fff; border:1px solid #e8eaf0; border-radius:10px; box-shadow:0 1px 3px rgba(26,31,94,.06); }

@@ -53,6 +53,8 @@ function btp_omg_scanner_shortcode() {
   <div class="omg-layout">
    <div class="omg-main">
 
+  <div class="omg-core">
+
   <div class="omg-notice">
     <strong>Pickup orders only.</strong> OMG can only bulk process pickups, so a shipping order scanned
     here won&rsquo;t go through with the batch.
@@ -94,6 +96,11 @@ function btp_omg_scanner_shortcode() {
     </div>
   </div>
 
+  </div><!-- /omg-core -->
+
+  <details class="omg-extras">
+    <summary>Settings and full list</summary>
+
   <div class="omg-settings">
     <label class="omg-opt"><input type="checkbox" id="omgSound" checked> Beep on scan</label>
     <label class="omg-opt"><input type="checkbox" id="omgSkipDupes"> Ignore repeat scans</label>
@@ -123,6 +130,8 @@ function btp_omg_scanner_shortcode() {
     numbers onto this page at once. Capture only runs while this tab is open, so scans on the Schedule
     board never land here.
   </p>
+
+  </details>
 
    </div><!-- /omg-main -->
 
@@ -178,6 +187,18 @@ function btp_omg_scanner_shortcode() {
   #bt-omg-scanner .omg-layout { grid-template-columns:1fr; }
   #bt-omg-scanner .omg-guide { position:static; order:-1; }
 }
+
+
+/* ---- the working set, and everything else ---- */
+#bt-omg-scanner .omg-core { padding:16px; background:#fff; border:1px solid #dfe3ed; border-radius:13px; box-shadow:0 2px 10px rgba(26,31,94,.07); }
+#bt-omg-scanner .omg-core > *:first-child { margin-top:0; }
+#bt-omg-scanner .omg-extras { margin-top:16px; }
+#bt-omg-scanner .omg-extras > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:9px; padding:11px 15px; background:transparent; border:1px dashed #d6dbe8; border-radius:9px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:#9ca3b8; transition:all .15s; }
+#bt-omg-scanner .omg-extras > summary::-webkit-details-marker { display:none; }
+#bt-omg-scanner .omg-extras > summary:hover { color:#5a6380; border-color:#b9c1d3; }
+#bt-omg-scanner .omg-extras > summary::after { content:"+"; margin-left:auto; font-size:17px; font-weight:400; line-height:1; }
+#bt-omg-scanner .omg-extras[open] > summary::after { content:"\2212"; }
+#bt-omg-scanner .omg-extras[open] > summary { margin-bottom:4px; }
 
 #bt-omg-scanner .omg-label { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:#9ca3b8; }
 
