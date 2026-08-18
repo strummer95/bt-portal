@@ -129,19 +129,14 @@ function btp_omg_scanner_shortcode() {
    <aside class="omg-guide">
      <div class="omg-guidetitle">How to do this</div>
      <ol class="omg-steps">
-       <li>Get your <b>pickup</b> slips ready.
-           <span class="omg-said">Shipping orders don&rsquo;t work here.</span></li>
-       <li>Scan them one after another.
-           <span class="omg-said">No need to touch the keyboard. Each one beeps.</span></li>
-       <li>A <b>red flash</b> means you already scanned that one.
-           <span class="omg-said">It was skipped. Just carry on.</span></li>
+       <li>Scan your <b>pickup</b> slips, one after another.</li>
        <li>Check the <b>Orders</b> count matches your pile.</li>
        <li>Press <b>Copy this</b>.</li>
-       <li>Go to OMG and paste into the order box.</li>
-       <li>Come back and press <b>Clear all</b> before the next pile.</li>
+       <li>Paste into the order box in OMG.</li>
+       <li>Press <b>Clear all</b>.</li>
      </ol>
      <div class="omg-guidefoot">
-       <b>Stuck?</b> If nothing happens when you scan, click once on this page first, then scan again.
+       Pickup orders only &mdash; shipping orders won&rsquo;t go through with the batch.
      </div>
    </aside>
   </div><!-- /omg-layout -->

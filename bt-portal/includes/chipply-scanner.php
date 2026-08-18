@@ -117,20 +117,15 @@ function btp_chipply_scanner_shortcode() {
    <aside class="cs-guide">
      <div class="cs-guidetitle">How to do this</div>
      <ol class="cs-steps">
-       <li>Get your Chipply slips ready.</li>
-       <li>Scan them one after another.
-           <span class="cs-said">No need to touch the keyboard. Each one beeps.</span></li>
-       <li>A <b>red flash</b> means you already scanned that one.
-           <span class="cs-said">It was skipped. Just carry on.</span></li>
+       <li>Scan your slips, one after another.</li>
        <li>Check the <b>Orders</b> count matches your pile.</li>
-       <li>Click the blue <b>Open in Chipply</b> button.
-           <span class="cs-said">Chipply opens in a new tab with only your orders.</span></li>
-       <li>Tick the box at the <b>top of the list</b> to select them all.</li>
-       <li>Print your labels, or change the status.</li>
-       <li>Come back here and press <b>Clear all</b>.</li>
+       <li>Click <b>Open in Chipply</b>.</li>
+       <li>Tick the box at the top of the list.</li>
+       <li>Print labels, or change the status.</li>
+       <li>Come back and press <b>Clear all</b>.</li>
      </ol>
      <div class="cs-guidefoot">
-       <b>More than one button?</b> Big piles get split up. Do the first one, come back, then do the next.
+       Two buttons means the pile was split. Do the first, come back, do the next.
      </div>
    </aside>
   </div><!-- /cs-layout -->
