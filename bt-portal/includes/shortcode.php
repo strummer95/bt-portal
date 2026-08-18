@@ -961,6 +961,7 @@ add_shortcode( 'bt_schedule', function() {
             <div class="tab-menu-item" data-tab="contacts" onclick="btSwitchTab('contacts')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts</div>
             <div class="tab-menu-item" data-tab="exchanges" onclick="btSwitchTab('exchanges')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Exchanges</div>
             <div class="tab-menu-item" data-tab="omgscan" onclick="btSwitchTab('omgscan')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 5v14"/><path d="M7 5v14"/><path d="M11 5v14"/><path d="M15 5v14"/><path d="M19 5v14"/></svg>OMG Scanner</div>
+            <div class="tab-menu-item" data-tab="barcoder" onclick="btSwitchTab('barcoder')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2"/><path d="M17 4h2a1 1 0 0 1 1 1v2"/><path d="M20 17v2a1 1 0 0 1-1 1h-2"/><path d="M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 9v6"/><path d="M11 9v6"/><path d="M14 9v6"/><path d="M16.5 9v6"/></svg>Chipply Barcoder</div>
           </div>
         </div>
       </div>
@@ -1180,6 +1181,13 @@ add_shortcode( 'bt_schedule', function() {
 <div id="bt-tab-omgscan" class="tab-content" style="width:100%;box-sizing:border-box;">
   <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
     <?php echo do_shortcode('[bt_omg_scanner]'); ?>
+  </div>
+</div>
+
+<!-- CHIPPLY BARCODER TAB -->
+<div id="bt-tab-barcoder" class="tab-content" style="width:100%;box-sizing:border-box;">
+  <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
+    <?php echo do_shortcode('[bt_chipply_barcoder]'); ?>
   </div>
 </div>
 
@@ -3397,7 +3405,7 @@ async function btRestoreFromBackup(id, label) {
 /* ── TABS ── */
 /* Tabs that live inside the OTHER dropdown rather than on the bar itself.
    Add a tab here and it needs nothing else in this function. */
-const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', omgscan: 'OMG Scanner' };
+const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', omgscan: 'OMG Scanner', barcoder: 'Chipply Barcoder' };
 
 function btToggleMore(e) {
   // Clicks on the menu items bubble up to this handler; ignore them so the

@@ -30,6 +30,8 @@ function btp_tab_map() {
         'exchanges'     => 'exchanges',
         'omg-scanner'   => 'omgscan',
         'scanner'       => 'omgscan',    // convenience alias
+        'chipply-barcoder' => 'barcoder',
+        'barcoder'         => 'barcoder',
     ) );
 }
 
@@ -43,6 +45,7 @@ function btp_tab_slugs() {
         'contacts'  => 'contacts',
         'exchanges' => 'exchanges',
         'omgscan'   => 'omg-scanner',
+        'barcoder'  => 'chipply-barcoder',
     );
 }
 
