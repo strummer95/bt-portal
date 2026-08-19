@@ -19,7 +19,9 @@ if (!defined('ABSPATH')) exit;
 
 define('BTP_PRINTAVO_GQL',      'https://www.printavo.com/api/v2');
 define('BTP_PRINTAVO_BASE',       'https://www.printavo.com/invoices/');
-define('BTP_PRINTAVO_QUOTE_BASE', 'https://www.printavo.com/quotes/');
+// Printavo serves quotes under /invoices/{id} as well - verified against a real
+// quote (visualId 36825 -> id 22855032). Do not 'fix' this to /quotes/.
+define('BTP_PRINTAVO_QUOTE_BASE', 'https://www.printavo.com/invoices/');
 define('BTP_PRINTAVO_SEARCH',     'https://www.printavo.com/search?query=');
 define('BTP_PRINTAVO_TTL_HIT',  DAY_IN_SECONDS);
 define('BTP_PRINTAVO_TTL_MISS', 5 * MINUTE_IN_SECONDS);
@@ -31,22 +33,25 @@ define('BTP_PRINTAVO_TTL_MISS', 5 * MINUTE_IN_SECONDS);
  * may have used so nothing has to be re-entered after the port.
  */
 function btp_printavo_creds() {
-    $email_keys = array('btp_printavo_email', 'bt_printavo_email', 'btpc_printavo_email', 'boomerts_printavo_email', 'printavo_email');
-    $token_keys = array('btp_printavo_token', 'bt_printavo_token', 'btpc_printavo_token', 'boomerts_printavo_token', 'printavo_token');
+    $email_keys = array('btp_printavo_email', 'btpc_email', 'bt_printavo_email', 'btpc_printavo_email', 'boomerts_printavo_email', 'printavo_email');
+    $token_keys = array('btp_printavo_token', 'btpc_token', 'bt_printavo_token', 'btpc_printavo_token', 'boomerts_printavo_token', 'printavo_token');
 
     $email = '';
     $token = '';
 
+    $email_key = '';
+    $token_key = '';
+
     foreach ($email_keys as $k) {
         $v = get_option($k);
-        if (!empty($v)) { $email = trim($v); break; }
+        if (!empty($v)) { $email = trim($v); $email_key = $k; break; }
     }
     foreach ($token_keys as $k) {
         $v = get_option($k);
-        if (!empty($v)) { $token = trim($v); break; }
+        if (!empty($v)) { $token = trim($v); $token_key = $k; break; }
     }
 
-    return array('email' => $email, 'token' => $token);
+    return array('email' => $email, 'token' => $token, 'email_key' => $email_key, 'token_key' => $token_key);
 }
 
 /* ── transport ───────────────────────────────────────────────────────── */
@@ -209,7 +214,9 @@ function btp_printavo_flush_cache() {
          WHERE option_name LIKE '\_transient\_btp\_pv\_%'
             OR option_name LIKE '\_transient\_timeout\_btp\_pv\_%'
             OR option_name LIKE '\_transient\_bt\_pv\_%'
-            OR option_name LIKE '\_transient\_timeout\_bt\_pv\_%'"
+            OR option_name LIKE '\_transient\_timeout\_bt\_pv\_%'
+            OR option_name LIKE '\_transient\_btpc\_link\_%'
+            OR option_name LIKE '\_transient\_timeout\_btpc\_link\_%'"
     );
 }
 
@@ -229,6 +236,8 @@ add_action('rest_api_init', function() {
                 $creds = btp_printavo_creds();
                 $result['creds_email_set'] = !empty($creds['email']);
                 $result['creds_token_set'] = !empty($creds['token']);
+                $result['creds_email_key'] = $creds['email_key'];
+                $result['creds_token_key'] = $creds['token_key'];
                 return new WP_REST_Response($result, 200);
             }
 
@@ -291,6 +300,9 @@ function btp_printavo_admin_page() {
     <div class="wrap">
         <h1>Printavo</h1>
         <p>Order numbers on job cards resolve through this connection. Tokens expire yearly.</p>
+        <p><em>Reading credentials from:
+            <code><?php echo esc_html($creds['email_key'] ?: 'nothing — email not set'); ?></code> /
+            <code><?php echo esc_html($creds['token_key'] ?: 'nothing — token not set'); ?></code></em></p>
 
         <?php if ($notice): ?><div class="notice notice-success"><p><?php echo esc_html($notice); ?></p></div><?php endif; ?>
 
