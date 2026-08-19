@@ -18,8 +18,9 @@
 if (!defined('ABSPATH')) exit;
 
 define('BTP_PRINTAVO_GQL',      'https://www.printavo.com/api/v2');
-define('BTP_PRINTAVO_BASE',     'https://www.printavo.com/invoices/');
-define('BTP_PRINTAVO_SEARCH',   'https://www.printavo.com/search?q=');
+define('BTP_PRINTAVO_BASE',       'https://www.printavo.com/invoices/');
+define('BTP_PRINTAVO_QUOTE_BASE', 'https://www.printavo.com/quotes/');
+define('BTP_PRINTAVO_SEARCH',     'https://www.printavo.com/search?query=');
 define('BTP_PRINTAVO_TTL_HIT',  DAY_IN_SECONDS);
 define('BTP_PRINTAVO_TTL_MISS', 5 * MINUTE_IN_SECONDS);
 
@@ -83,7 +84,9 @@ function btp_printavo_gql($query, $vars = array()) {
 }
 
 /**
- * searchTerm is fuzzy, so only accept a node whose visualId matches exactly.
+ * The query argument is fuzzy, so only accept a node whose visualId matches
+ * exactly. Returns the node with its __typename so the caller can build the
+ * right URL — quotes live at /quotes/{id}, invoices at /invoices/{id}.
  */
 function btp_printavo_match($body, $path, $order_number) {
     if (empty($body['data'][$path]['nodes']) || !is_array($body['data'][$path]['nodes'])) return null;
@@ -92,6 +95,20 @@ function btp_printavo_match($body, $path, $order_number) {
         if (isset($node['visualId']) && (string) $node['visualId'] === (string) $order_number) return $node;
     }
     return null;
+}
+
+/**
+ * Quotes and Invoices are different URLs in the Printavo UI.
+ */
+function btp_printavo_url_for($node, $fallback_type = '') {
+    $type = '';
+    if (!empty($node['__typename'])) {
+        $type = strtolower($node['__typename']);
+    } elseif ($fallback_type) {
+        $type = strtolower($fallback_type);
+    }
+    $path = ($type === 'quote') ? BTP_PRINTAVO_QUOTE_BASE : BTP_PRINTAVO_BASE;
+    return $path . rawurlencode($node['id']);
 }
 
 /* ── lookup ──────────────────────────────────────────────────────────── */
@@ -121,9 +138,23 @@ function btp_printavo_lookup($order_number, $fresh = false) {
         'error'        => '',
     );
 
+    /*
+     * Quotes and Invoices are joined into the OrderUnion type, so one `orders`
+     * query covers both — which is the point, since an order moves from one to
+     * the other when it gets invoiced.
+     *
+     * The search argument is `query`, NOT `searchTerm`. Getting that wrong
+     * makes the whole request an "unknown argument" error and every lookup
+     * silently returns nothing.
+     */
     $combined = 'query BTLookup($num: String!) {
-        quotes(first: 5, searchTerm: $num) { nodes { id visualId } }
-        invoices(first: 5, searchTerm: $num) { nodes { id visualId } }
+        orders(first: 10, query: $num) {
+            nodes {
+                __typename
+                ... on Quote { id visualId }
+                ... on Invoice { id visualId }
+            }
+        }
     }';
 
     $body = btp_printavo_gql($combined, array('num' => $order_number));
@@ -134,33 +165,35 @@ function btp_printavo_lookup($order_number, $fresh = false) {
         return $out;
     }
 
-    $node = btp_printavo_match($body, 'quotes', $order_number);
-    if ($node) $out['source'] = 'quote';
-
-    if (!$node) {
-        $node = btp_printavo_match($body, 'invoices', $order_number);
-        if ($node) $out['source'] = 'invoice';
+    $node = btp_printavo_match($body, 'orders', $order_number);
+    if ($node) {
+        $out['source'] = !empty($node['__typename']) ? strtolower($node['__typename']) : 'order';
+        $out['url']    = btp_printavo_url_for($node);
     }
 
-    // If the combined query errored on one field, retry each on its own.
+    // If the union query errored, fall back to each collection on its own.
     if (!$node && !empty($body['errors'])) {
         $singles = array(
-            'quote'   => 'query BTQuote($num: String!) { quotes(first: 5, searchTerm: $num) { nodes { id visualId } } }',
-            'invoice' => 'query BTInvoice($num: String!) { invoices(first: 5, searchTerm: $num) { nodes { id visualId } } }',
+            'invoice' => array('invoices', 'query BTInvoice($num: String!) { invoices(first: 10, query: $num) { nodes { id visualId } } }'),
+            'quote'   => array('quotes',   'query BTQuote($num: String!) { quotes(first: 10, query: $num) { nodes { id visualId } } }'),
         );
-        foreach ($singles as $label => $q) {
+        foreach ($singles as $label => $pair) {
+            list($path, $q) = $pair;
             $single = btp_printavo_gql($q, array('num' => $order_number));
             if (is_wp_error($single)) continue;
-            $path = ($label === 'quote') ? 'quotes' : 'invoices';
-            $hit  = btp_printavo_match($single, $path, $order_number);
-            if ($hit) { $node = $hit; $out['source'] = $label; break; }
+            $hit = btp_printavo_match($single, $path, $order_number);
+            if ($hit) {
+                $node          = $hit;
+                $out['source'] = $label;
+                $out['url']    = btp_printavo_url_for($hit, $label);
+                break;
+            }
         }
         if (!$node) $out['error'] = 'Printavo returned errors: ' . wp_json_encode($body['errors']);
     }
 
     if ($node) {
         $out['found'] = true;
-        $out['url']   = BTP_PRINTAVO_BASE . rawurlencode($node['id']);
         set_transient($cache_key, $out, BTP_PRINTAVO_TTL_HIT);
     } else {
         set_transient($cache_key, $out, BTP_PRINTAVO_TTL_MISS);
