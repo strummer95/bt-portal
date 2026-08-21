@@ -1641,11 +1641,11 @@ function btNormalizeJob(j) {
   let lineItems = [];
   if (location.includes(' | ')) {
     lineItems = location.split(' | ').map(part => {
-      const m = part.match(/^(\d+)\s*@\s*(.+)$/);
+      const m = part.match(/^(\d+)\s*@\s*(.*)$/);
       return m ? {qty:m[1], location:m[2].trim()} : {qty:'', location:part.trim()};
     });
   } else {
-    const m = location.match(/^(\d+)\s*@\s*(.+)$/);
+    const m = location.match(/^(\d+)\s*@\s*(.*)$/);
     if (m) {
       lineItems = [{qty:m[1], location:m[2].trim()}];
     } else {
@@ -2413,9 +2413,12 @@ function btSelectStatus(val) {
 async function btSaveJob() {
   const lineItems = btGetLineItems();
   const totalQty = lineItems.reduce((sum, li) => sum + (parseInt(li.qty)||0), 0);
+  /* A blank Loc # means "no location on this job" and must survive the round trip.
+     It used to fall back to '1', so clearing the field wrote a 1 to the DB and the
+     card grew a Loc chip back on the next open. Blank stays blank. */
   const locationSummary = lineItems.length === 1
-    ? (lineItems[0].location || '1')
-    : lineItems.map(li => (li.qty ? li.qty + ' @ ' : '') + (li.location || '1')).filter(Boolean).join(' | ');
+    ? lineItems[0].location
+    : lineItems.map(li => (li.qty ? li.qty + ' @ ' : '') + li.location).filter(s => s.trim()).join(' | ');
   const payload = {
     order_num: document.getElementById('btFOrderNum').value.trim(),
     due_date:  document.getElementById('btFDueDate').value,
