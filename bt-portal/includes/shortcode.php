@@ -136,7 +136,7 @@ add_shortcode( 'bt_schedule', function() {
   font-size:12px; line-height:1; }
 #bt-schedule-app .btv-caret:hover { color:#1a1f5e; }
 #bt-schedule-app .btv-acts { display:flex; gap:4px; justify-content:flex-end; white-space:nowrap; }
-#bt-schedule-app .btv-form { grid-column:1/-1; border:2px solid #1a1f5e; border-radius:8px; padding:16px;
+#bt-schedule-app .btv-form { margin-bottom:14px; border:2px solid #1a1f5e; border-radius:8px; padding:16px;
   background:#fff; }
 #bt-schedule-app .btv-form .btv-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
   gap:10px; }
