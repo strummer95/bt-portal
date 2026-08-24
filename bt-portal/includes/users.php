@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) exit;
 
 define('BTP_ROLE', 'bt_portal_user');
 define('BTP_ROLE_ADMIN', 'bt_portal_admin');
-define('BTP_ROLES_VERSION', '2');
+define('BTP_ROLES_VERSION', '3');
 define('BTP_RP_COOKIE', 'btp-setpass-' . COOKIEHASH);
 
 /** The names that were hardcoded in the header dropdown before v0.21.0. */
@@ -49,11 +49,13 @@ function btp_register_roles() {
         'read'                   => true,
         'bt_portal_access'       => true,
         'bt_manage_portal_users' => true,
+        'bt_portal_backups'      => true,
     ));
 
     if ($admin = get_role('administrator')) {
         $admin->add_cap('bt_portal_access');
         $admin->add_cap('bt_manage_portal_users');
+        $admin->add_cap('bt_portal_backups');
     }
 
     update_option('btp_roles_version', BTP_ROLES_VERSION);
@@ -794,6 +796,15 @@ function btp_users_notice($message, $type = 'success') {
 
 function btp_rest_can_access() {
     return is_user_logged_in() && current_user_can('bt_portal_access');
+}
+
+/**
+ * Backup, restore and delete. Held to portal-admin level because a restore
+ * silently replaces the whole board, and because backups carry every job,
+ * store and contact in one download.
+ */
+function btp_rest_can_backup() {
+    return is_user_logged_in() && current_user_can('bt_portal_backups');
 }
 
 function btp_rest_can_manage() {

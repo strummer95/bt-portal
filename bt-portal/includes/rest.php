@@ -34,11 +34,11 @@ add_action( 'rest_api_init', function() {
     register_rest_route( $ns, '/store-categories/reorder', ['methods'=>'POST','callback'=>'btp_reorder_store_cats','permission_callback'=>'__return_true']);
 
     // ── BACKUPS ───────────────────────────────────────────────────────────
-    register_rest_route( $ns, '/backups', ['methods'=>'GET','callback'=>'btp_get_backups','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/backups', ['methods'=>'POST','callback'=>'btp_create_backup','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/backups/(?P<id>\d+)', ['methods'=>'GET','callback'=>'btp_get_backup','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/backups/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_backup','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/backups/(?P<id>\d+)/restore', ['methods'=>'POST','callback'=>'btp_restore_backup','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/backups', ['methods'=>'GET','callback'=>'btp_get_backups','permission_callback'=>'btp_rest_can_backup']);
+    register_rest_route( $ns, '/backups', ['methods'=>'POST','callback'=>'btp_create_backup','permission_callback'=>'btp_rest_can_backup']);
+    register_rest_route( $ns, '/backups/(?P<id>\d+)', ['methods'=>'GET','callback'=>'btp_get_backup','permission_callback'=>'btp_rest_can_backup']);
+    register_rest_route( $ns, '/backups/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_backup','permission_callback'=>'btp_rest_can_backup']);
+    register_rest_route( $ns, '/backups/(?P<id>\d+)/restore', ['methods'=>'POST','callback'=>'btp_restore_backup','permission_callback'=>'btp_rest_can_backup']);
 
     // ── CONTACTS ──────────────────────────────────────────────────────────
     register_rest_route( $ns, '/contacts', ['methods'=>'GET','callback'=>'btp_get_contacts','permission_callback'=>'__return_true']);
