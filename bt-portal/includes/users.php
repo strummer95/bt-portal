@@ -815,8 +815,20 @@ add_action('rest_api_init', function() {
         'methods' => 'GET', 'callback' => 'btp_rest_users',
         'permission_callback' => 'btp_rest_can_manage'));
 
+    register_rest_route($ns, '/account/users', array(
+        'methods' => 'POST', 'callback' => 'btp_rest_user_create',
+        'permission_callback' => 'btp_rest_can_manage'));
+
     register_rest_route($ns, '/account/users/(?P<id>\d+)', array(
         'methods' => 'POST', 'callback' => 'btp_rest_user_save',
+        'permission_callback' => 'btp_rest_can_manage'));
+
+    register_rest_route($ns, '/account/users/(?P<id>\d+)/role', array(
+        'methods' => 'POST', 'callback' => 'btp_rest_user_role',
+        'permission_callback' => 'btp_rest_can_manage'));
+
+    register_rest_route($ns, '/account/users/(?P<id>\d+)', array(
+        'methods' => 'DELETE', 'callback' => 'btp_rest_user_remove',
         'permission_callback' => 'btp_rest_can_manage'));
 
     register_rest_route($ns, '/account/users/(?P<id>\d+)/reset', array(
@@ -907,6 +919,67 @@ function btp_rest_user_save($req) {
     }
 
     return rest_ensure_response(btp_rest_user_row(get_userdata($id)));
+}
+
+function btp_rest_user_create($req) {
+    $p      = $req->get_json_params();
+    $login  = sanitize_user($p['login'] ?? '', true);
+    $email  = sanitize_email($p['email'] ?? '');
+    $name   = sanitize_text_field($p['name'] ?? '');
+    $legacy = sanitize_text_field($p['legacy'] ?? '');
+    $role   = sanitize_key($p['role'] ?? BTP_ROLE);
+
+    if (!in_array($role, btp_portal_roles(), true)) $role = BTP_ROLE;
+    if ($login === '')           return new WP_Error('btp_bad', 'A username is required.', array('status'=>400));
+    if (!is_email($email))       return new WP_Error('btp_bad', 'A valid email is required.', array('status'=>400));
+    if (username_exists($login)) return new WP_Error('btp_bad', 'That username is taken.', array('status'=>409));
+    if (email_exists($email))    return new WP_Error('btp_bad', 'That email is already on an account.', array('status'=>409));
+    if ($legacy && !in_array($legacy, btp_legacy_names(), true)) $legacy = '';
+
+    $id = wp_insert_user(array(
+        'user_login'   => $login,
+        'user_email'   => $email,
+        'user_pass'    => wp_generate_password(24, true, true),
+        'display_name' => $name ? $name : ($legacy ? $legacy : $login),
+        'role'         => $role,
+    ));
+    if (is_wp_error($id)) return new WP_Error('btp_bad', $id->get_error_message(), array('status'=>400));
+
+    if ($legacy) update_user_meta($id, 'btp_legacy_name', $legacy);
+    wp_new_user_notification($id, null, 'user');   // invite — they pick their own password
+
+    return rest_ensure_response(btp_rest_user_row(get_userdata($id)));
+}
+
+function btp_rest_user_role($req) {
+    $id = (int) $req['id'];
+    if (!($user = get_userdata($id))) return new WP_Error('btp_no_user','No such user.',array('status'=>404));
+    if ($id === get_current_user_id())
+        return new WP_Error('btp_self','You cannot change your own access.',array('status'=>403));
+    if (in_array('administrator', (array) $user->roles, true))
+        return new WP_Error('btp_wpadmin','That is a WordPress administrator - change it under Users.',array('status'=>403));
+
+    $p    = $req->get_json_params();
+    $role = sanitize_key($p['role'] ?? BTP_ROLE);
+    if (!in_array($role, btp_portal_roles(), true)) $role = BTP_ROLE;
+
+    foreach (btp_portal_roles() as $r) $user->remove_role($r);
+    $user->add_role($role);
+
+    return rest_ensure_response(btp_rest_user_row(get_userdata($id)));
+}
+
+function btp_rest_user_remove($req) {
+    $id = (int) $req['id'];
+    if (!($user = get_userdata($id))) return new WP_Error('btp_no_user','No such user.',array('status'=>404));
+    if ($id === get_current_user_id())
+        return new WP_Error('btp_self','You cannot remove your own access.',array('status'=>403));
+    if (in_array('administrator', (array) $user->roles, true))
+        return new WP_Error('btp_wpadmin','That is a WordPress administrator - change it under Users.',array('status'=>403));
+
+    // Role only. The account and everything stamped with their name survives.
+    foreach (btp_portal_roles() as $r) $user->remove_role($r);
+    return rest_ensure_response(array('ok' => true, 'id' => $id, 'login' => $user->user_login));
 }
 
 function btp_rest_user_reset($req) {

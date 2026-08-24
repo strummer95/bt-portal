@@ -93,7 +93,7 @@ add_shortcode( 'bt_schedule', function() {
 /* ── ACCOUNT PANEL ── */
 #btpAcctBg { display:none; position:fixed; inset:0; background:rgba(15,18,64,.55); z-index:999998; }
 #btpAcctPanel { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  width:min(680px,94vw); max-height:88vh; background:#fff; border-radius:8px; z-index:999999;
+  width:min(860px,96vw); max-height:88vh; background:#fff; border-radius:8px; z-index:999999;
   box-shadow:0 18px 60px rgba(15,18,64,.4); font-family:'Barlow',sans-serif; overflow:hidden;
   flex-direction:column; }
 #btpAcctPanel .btp-acct-head { display:flex; align-items:center; justify-content:space-between;
@@ -120,32 +120,56 @@ add_shortcode( 'bt_schedule', function() {
   text-transform:uppercase; color:#9ca3b8; }
 #btpAcctPanel .btp-acct-rule:before, #btpAcctPanel .btp-acct-rule:after { content:''; flex:1;
   height:1px; background:#e8eaf0; }
-#btpAcctPanel .btp-acct-row { border:1px solid #e8eaf0; border-radius:6px; padding:12px;
-  margin-bottom:10px; }
-#btpAcctPanel .btp-acct-row-top { display:flex; align-items:baseline; gap:8px; margin-bottom:10px;
-  flex-wrap:wrap; }
+#btpAcctPanel .btp-acct-head-row, #btpAcctPanel .btp-acct-line {
+  display:grid; grid-template-columns:132px minmax(0,1fr) minmax(0,1.4fr) 104px 104px;
+  gap:6px; align-items:center; }
+#btpAcctPanel .btp-acct-head-row { padding:0 2px 5px; border-bottom:1px solid #e8eaf0;
+  font-family:'Barlow Condensed',sans-serif; font-size:10px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:#9ca3b8; position:sticky; top:0; background:#fff; z-index:2; }
+#btpAcctPanel .btp-acct-line { padding:4px 2px; border-bottom:1px solid #f4f5f9; }
+#btpAcctPanel .btp-acct-line:hover { background:#fafbfd; }
+#btpAcctPanel .btp-acct-line.is-dirty { background:#fffdf2; }
+#btpAcctPanel .btp-acct-line.is-gone { opacity:.4; }
+#btpAcctPanel .btp-acct-who { display:flex; align-items:center; gap:5px; min-width:0; }
 #btpAcctPanel .btp-acct-login { font-family:'Barlow Condensed',sans-serif; font-weight:700;
-  font-size:14px; letter-spacing:.04em; text-transform:uppercase; color:#1a1f5e; }
-#btpAcctPanel .btp-acct-tag { font-size:10px; font-weight:700; letter-spacing:.06em;
-  text-transform:uppercase; padding:2px 7px; border-radius:20px; background:#f4f5f9; color:#5a6380; }
-#btpAcctPanel .btp-acct-tag.is-admin { background:#1a1f5e; color:#fff; }
-#btpAcctPanel .btp-acct-last { margin-left:auto; font-size:11px; color:#9ca3b8; }
-#btpAcctPanel .btp-acct-grid { display:grid; grid-template-columns:1fr 1fr 120px; gap:8px; }
-#btpAcctPanel .btp-acct-grid input, #btpAcctPanel .btp-acct-grid select { width:100%;
-  box-sizing:border-box; font-family:'Barlow',sans-serif; font-size:14px; padding:8px 9px;
-  border:1px solid #e8eaf0; border-radius:5px; background:#fff; outline:none; }
-#btpAcctPanel .btp-acct-grid input:focus, #btpAcctPanel .btp-acct-grid select:focus { border-color:#1a1f5e; }
-#btpAcctPanel .btp-acct-actions { display:flex; gap:8px; margin-top:10px; }
-#btpAcctPanel .btp-acct-mini { font-family:'Barlow Condensed',sans-serif; font-size:11px;
-  font-weight:700; letter-spacing:.06em; padding:7px 12px; border-radius:4px; cursor:pointer;
-  border:1px solid #1a1f5e; background:#1a1f5e; color:#fff; }
-#btpAcctPanel .btp-acct-mini.ghost { background:#fff; color:#1a1f5e; }
-#btpAcctPanel .btp-acct-mini[disabled] { opacity:.5; cursor:default; }
-#btpAcctPanel .btp-acct-msg { padding:9px 12px; border-radius:4px; font-size:13px; margin-bottom:14px; }
-#btpAcctPanel .btp-acct-msg.ok { background:#eaf7ee; border-left:3px solid #2e7d32; color:#1b5e20; }
-#btpAcctPanel .btp-acct-msg.err { background:#fdecea; border-left:3px solid #c0392b; color:#7d2018; }
-@media (max-width:640px) {
-  #btpAcctPanel .btp-acct-grid { grid-template-columns:1fr; }
+  font-size:13px; letter-spacing:.03em; text-transform:uppercase; color:#1a1f5e;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#btpAcctPanel .btp-acct-dot { flex-shrink:0; width:6px; height:6px; border-radius:50%;
+  background:#c9cde0; }
+#btpAcctPanel .btp-acct-dot.is-admin { background:#e91e8c; }
+#btpAcctPanel .btp-acct-dot.is-wp { background:#1a1f5e; }
+#btpAcctPanel .btp-acct-line input, #btpAcctPanel .btp-acct-line select,
+#btpAcctPanel .btp-acct-new input, #btpAcctPanel .btp-acct-new select {
+  width:100%; min-width:0; box-sizing:border-box; font-family:'Barlow',sans-serif; font-size:13px;
+  padding:5px 7px; border:1px solid transparent; border-radius:4px; background:transparent;
+  color:#0f1240; outline:none; }
+#btpAcctPanel .btp-acct-line input:hover, #btpAcctPanel .btp-acct-line select:hover { background:#f4f5f9; }
+#btpAcctPanel .btp-acct-line input:focus, #btpAcctPanel .btp-acct-line select:focus {
+  border-color:#1a1f5e; background:#fff; }
+#btpAcctPanel .btp-acct-ops { display:flex; gap:3px; justify-content:flex-end; }
+#btpAcctPanel .btp-acct-ic { width:26px; height:26px; display:flex; align-items:center;
+  justify-content:center; border:1px solid #e8eaf0; border-radius:4px; background:#fff;
+  color:#5a6380; cursor:pointer; padding:0; flex-shrink:0; }
+#btpAcctPanel .btp-acct-ic:hover { border-color:#1a1f5e; color:#1a1f5e; }
+#btpAcctPanel .btp-acct-ic.save { background:#1a1f5e; border-color:#1a1f5e; color:#fff; }
+#btpAcctPanel .btp-acct-ic.danger:hover { border-color:#c0392b; color:#c0392b; }
+#btpAcctPanel .btp-acct-ic[disabled] { opacity:.28; cursor:default; }
+#btpAcctPanel .btp-acct-new { display:grid;
+  grid-template-columns:132px minmax(0,1fr) minmax(0,1.4fr) 104px 104px; gap:6px;
+  align-items:center; padding:8px 2px; background:#f4f5f9; border-radius:5px; margin-bottom:10px; }
+#btpAcctPanel .btp-acct-new input, #btpAcctPanel .btp-acct-new select { background:#fff;
+  border-color:#e8eaf0; }
+#btpAcctPanel .btp-acct-foot { display:flex; justify-content:space-between; align-items:center;
+  margin-top:10px; font-size:11px; color:#9ca3b8; }
+#btpAcctPanel .btp-acct-key { display:flex; gap:12px; align-items:center; }
+#btpAcctPanel .btp-acct-key span { display:flex; align-items:center; gap:4px; }
+@media (max-width:760px) {
+  #btpAcctPanel .btp-acct-head-row { display:none; }
+  #btpAcctPanel .btp-acct-line, #btpAcctPanel .btp-acct-new {
+    grid-template-columns:1fr 1fr; gap:5px; padding:9px 2px; }
+  #btpAcctPanel .btp-acct-who { grid-column:1 / -1; }
+  #btpAcctPanel .btp-acct-ops { grid-column:1 / -1; justify-content:flex-start; }
+  #btpAcctPanel .btp-acct-line input, #btpAcctPanel .btp-acct-line select { border-color:#e8eaf0; }
 }
 #bt-schedule-app .header-logo {
   background:var(--navy); padding:10px 20px; display:flex;
@@ -3439,6 +3463,7 @@ function btDownloadArtFiles() {
    control is convenience, not the security boundary. */
 
 let btpAcctData = null;
+let btpAcctNames = [];
 
 function btpAcctOpen() {
   document.getElementById('btpAcctBg').style.display = 'block';
@@ -3485,50 +3510,95 @@ async function btpAcctLoad() {
   }
 }
 
+const BTP_IC = {
+  save:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  mail:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/></svg>',
+  shield:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  x:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  plus:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+};
+
+function btpAcctLegacyOpts(selected, names) {
+  const opts = names.slice();
+  if (selected && opts.indexOf(selected) === -1) opts.push(selected);
+  return ['<option value="">— none —</option>'].concat(
+    opts.map(n => '<option value="' + btpAcctEsc(n) + '"' +
+      (n === selected ? ' selected' : '') + '>' + btpAcctEsc(n) + '</option>')
+  ).join('');
+}
+
 function btpAcctRenderList(users, legacyNames) {
-  const html = users.map(u => {
-    const opts = legacyNames.slice();
-    if (u.legacy && opts.indexOf(u.legacy) === -1) opts.push(u.legacy);
-    const optHtml = ['<option value="">— no old name —</option>'].concat(
-      opts.map(n => '<option value="' + btpAcctEsc(n) + '"' +
-        (n === u.legacy ? ' selected' : '') + '>' + btpAcctEsc(n) + '</option>')
-    ).join('');
+  btpAcctNames = legacyNames || [];
 
-    const tag = u.access === 'wpadmin'
-      ? '<span class="btp-acct-tag is-admin">WordPress admin</span>'
-      : (u.access === 'portaladmin'
-          ? '<span class="btp-acct-tag is-admin">Portal admin</span>'
-          : '<span class="btp-acct-tag">Portal user</span>');
+  const head =
+    '<div class="btp-acct-new">' +
+      '<input type="text" id="btpNewLogin" placeholder="username" autocomplete="off" spellcheck="false">' +
+      '<input type="text" id="btpNewName" placeholder="name shown in portal" autocomplete="off">' +
+      '<input type="email" id="btpNewEmail" placeholder="email for the invite" autocomplete="off">' +
+      '<select id="btpNewLegacy">' + btpAcctLegacyOpts('', btpAcctNames) + '</select>' +
+      '<div class="btp-acct-ops">' +
+        '<select id="btpNewRole" style="width:auto;font-size:11px;padding:5px 4px;">' +
+          '<option value="bt_portal_user">User</option>' +
+          '<option value="bt_portal_admin">Admin</option>' +
+        '</select>' +
+        '<button type="button" class="btp-acct-ic save" title="Create and send invite" ' +
+          'onclick="btpAcctCreate(this)">' + BTP_IC.plus + '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="btp-acct-head-row">' +
+      '<div>User</div><div>Name</div><div>Email</div><div>Old name</div>' +
+      '<div style="text-align:right;">Actions</div>' +
+    '</div>';
 
-    return '' +
-      '<div class="btp-acct-row" data-id="' + u.id + '">' +
-        '<div class="btp-acct-row-top">' +
-          '<span class="btp-acct-login">' + btpAcctEsc(u.login) + '</span>' + tag +
-          (u.is_self ? '<span class="btp-acct-tag">you</span>' : '') +
-          '<span class="btp-acct-last">' +
-            (u.last ? 'Last login ' + btpAcctEsc(u.last) : 'Never signed in') +
-          '</span>' +
-        '</div>' +
-        '<div class="btp-acct-grid">' +
-          '<div><label>Name</label>' +
-            '<input type="text" data-f="name" value="' + btpAcctEsc(u.name) + '"></div>' +
-          '<div><label>Email</label>' +
-            '<input type="email" data-f="email" value="' + btpAcctEsc(u.email) + '"></div>' +
-          '<div><label>Old name</label><select data-f="legacy">' + optHtml + '</select></div>' +
-        '</div>' +
-        '<div class="btp-acct-actions">' +
-          '<button type="button" class="btp-acct-mini" onclick="btpAcctSave(' + u.id + ',this)">SAVE</button>' +
-          '<button type="button" class="btp-acct-mini ghost" onclick="btpAcctResetUser(' + u.id + ',this)">SEND RESET LINK</button>' +
-        '</div>' +
-      '</div>';
-  }).join('');
+  const rows = users.map(btpAcctRowHtml).join('');
 
-  document.getElementById('btpAcctList').innerHTML = html ||
-    '<p class="btp-acct-note">Nobody has portal access yet.</p>';
+  document.getElementById('btpAcctList').innerHTML = head + rows +
+    '<div class="btp-acct-foot">' +
+      '<div class="btp-acct-key">' +
+        '<span><i class="btp-acct-dot"></i>Portal user</span>' +
+        '<span><i class="btp-acct-dot is-admin"></i>Portal admin</span>' +
+        '<span><i class="btp-acct-dot is-wp"></i>WordPress admin</span>' +
+      '</div>' +
+      '<div>' + users.length + ' with access</div>' +
+    '</div>';
+}
+
+function btpAcctRowHtml(u) {
+  const dot = u.access === 'wpadmin' ? 'is-wp' : (u.access === 'portaladmin' ? 'is-admin' : '');
+  const locked = (u.access === 'wpadmin') || u.is_self;
+  const roleTitle = u.access === 'portaladmin' ? 'Remove admin' : 'Make admin';
+  const last = u.last ? 'Last login ' + u.last : 'Never signed in';
+
+  return '' +
+    '<div class="btp-acct-line" data-id="' + u.id + '">' +
+      '<div class="btp-acct-who" title="' + btpAcctEsc(u.login + ' — ' + last) + '">' +
+        '<i class="btp-acct-dot ' + dot + '"></i>' +
+        '<span class="btp-acct-login">' + btpAcctEsc(u.login) + '</span>' +
+      '</div>' +
+      '<input type="text" data-f="name" value="' + btpAcctEsc(u.name) + '" oninput="btpAcctDirty(this)">' +
+      '<input type="email" data-f="email" value="' + btpAcctEsc(u.email) + '" oninput="btpAcctDirty(this)">' +
+      '<select data-f="legacy" onchange="btpAcctDirty(this)">' +
+        btpAcctLegacyOpts(u.legacy, btpAcctNames) + '</select>' +
+      '<div class="btp-acct-ops">' +
+        '<button type="button" class="btp-acct-ic save" title="Save" onclick="btpAcctSave(' + u.id + ',this)">' + BTP_IC.save + '</button>' +
+        '<button type="button" class="btp-acct-ic" title="Email a password link" onclick="btpAcctResetUser(' + u.id + ',this)">' + BTP_IC.mail + '</button>' +
+        '<button type="button" class="btp-acct-ic" title="' + roleTitle + '" ' + (locked ? 'disabled' : '') +
+          ' onclick="btpAcctRole(' + u.id + ',\'' + (u.access === 'portaladmin' ? 'bt_portal_user' : 'bt_portal_admin') + '\',this)">' + BTP_IC.shield + '</button>' +
+        '<button type="button" class="btp-acct-ic danger" title="Remove portal access" ' + (locked ? 'disabled' : '') +
+          ' onclick="btpAcctRemove(' + u.id + ',\'' + btpAcctEsc(u.login) + '\',this)">' + BTP_IC.x + '</button>' +
+      '</div>' +
+    '</div>';
+}
+
+/* Highlight a row the moment it differs from what's saved, so nothing gets
+   typed and then abandoned unsaved. */
+function btpAcctDirty(el) {
+  const row = el.closest('.btp-acct-line');
+  if (row) row.classList.add('is-dirty');
 }
 
 function btpAcctRowValues(id) {
-  const row = document.querySelector('#btpAcctList .btp-acct-row[data-id="' + id + '"]');
+  const row = document.querySelector('#btpAcctList .btp-acct-line[data-id="' + id + '"]');
   if (!row) return null;
   return {
     name:   row.querySelector('[data-f="name"]').value.trim(),
@@ -3543,13 +3613,66 @@ async function btpAcctSave(id, btn) {
   btn.disabled = true;
   try {
     const saved = await btFetch('/account/users/' + id, 'POST', vals);
-    btpAcctMsg(saved.login + ' saved — the portal will show them as "' + saved.shown + '".', 'ok');
-    // Renaming yourself should be visible without hunting for a refresh.
+    const row = document.querySelector('#btpAcctList .btp-acct-line[data-id="' + id + '"]');
+    if (row) row.classList.remove('is-dirty');
+    btpAcctMsg(saved.login + ' saved — shown in the portal as "' + saved.shown + '".', 'ok');
     if (saved.is_self) setTimeout(() => location.reload(), 900);
   } catch (e) {
-    btpAcctMsg('Could not save that. Check the email address is valid and not already in use.', 'err');
+    btpAcctMsg('Could not save that. Check the email is valid and not already in use.', 'err');
   }
   btn.disabled = false;
+}
+
+async function btpAcctCreate(btn) {
+  const body = {
+    login:  document.getElementById('btpNewLogin').value.trim(),
+    name:   document.getElementById('btpNewName').value.trim(),
+    email:  document.getElementById('btpNewEmail').value.trim(),
+    legacy: document.getElementById('btpNewLegacy').value,
+    role:   document.getElementById('btpNewRole').value
+  };
+  if (!body.login || !body.email) {
+    btpAcctMsg('A username and an email are both needed.', 'err');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const made = await btFetch('/account/users', 'POST', body);
+    btpAcctMsg(made.login + ' created — an invite is on its way to ' + made.email +
+               '. They pick their own password from the link.', 'ok');
+    btpAcctLoad();
+  } catch (e) {
+    btpAcctMsg('Could not create that user. The username or email is probably already taken.', 'err');
+  }
+  btn.disabled = false;
+}
+
+async function btpAcctRole(id, role, btn) {
+  btn.disabled = true;
+  try {
+    const res = await btFetch('/account/users/' + id + '/role', 'POST', {role: role});
+    btpAcctMsg(res.login + ' is now a ' +
+      (res.access === 'portaladmin' ? 'portal admin — they can add and remove logins.' : 'regular portal user.'), 'ok');
+    btpAcctLoad();
+  } catch (e) {
+    btpAcctMsg('Could not change that.', 'err');
+    btn.disabled = false;
+  }
+}
+
+async function btpAcctRemove(id, login, btn) {
+  if (!confirm('Remove portal access for ' + login + '?\n\nTheir account and their name on past jobs stay put.')) return;
+  btn.disabled = true;
+  try {
+    await btFetch('/account/users/' + id, 'DELETE', {});
+    const row = document.querySelector('#btpAcctList .btp-acct-line[data-id="' + id + '"]');
+    if (row) row.classList.add('is-gone');
+    btpAcctMsg(login + ' can no longer open the portal.', 'ok');
+    btpAcctLoad();
+  } catch (e) {
+    btpAcctMsg('Could not remove that.', 'err');
+    btn.disabled = false;
+  }
 }
 
 async function btpAcctResetUser(id, btn) {
