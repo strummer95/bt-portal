@@ -111,31 +111,31 @@ add_shortcode( 'bt_schedule', function() {
   background:#e91e8c; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:12px;
   font-weight:700; letter-spacing:.07em; cursor:pointer; }
 #bt-schedule-app .btv-add:hover { background:#ff47a8; }
-#bt-schedule-app .btv-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:12px; }
-#bt-schedule-app .btv-card { border:1px solid #e8eaf0; border-radius:8px; background:#fff; padding:14px 15px; }
-#bt-schedule-app .btv-card h3 { margin:0 0 2px; font-family:'Oswald',sans-serif; font-size:15px;
-  font-weight:600; color:#0f1240; letter-spacing:.02em; }
-#bt-schedule-app .btv-cat { display:inline-block; font-family:'Barlow Condensed',sans-serif; font-size:10px;
-  font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#5a6380; background:#f4f5f9;
-  border-radius:20px; padding:2px 8px; margin-bottom:9px; }
-#bt-schedule-app .btv-kv { display:grid; grid-template-columns:74px 1fr; gap:3px 8px; font-size:13px;
-  line-height:1.45; }
-#bt-schedule-app .btv-k { font-family:'Barlow Condensed',sans-serif; font-size:10px; font-weight:700;
-  letter-spacing:.06em; text-transform:uppercase; color:#9ca3b8; padding-top:3px; }
-#bt-schedule-app .btv-v { color:#0f1240; word-break:break-word; }
-#bt-schedule-app .btv-v a { color:#1a1f5e; }
-#bt-schedule-app .btv-note { margin-top:9px; padding-top:9px; border-top:1px solid #f4f5f9; font-size:12px;
-  color:#5a6380; white-space:pre-line; line-height:1.5; }
-#bt-schedule-app .btv-secret { display:flex; align-items:center; gap:6px; }
-#bt-schedule-app .btv-dots { font-family:monospace; letter-spacing:2px; color:#9ca3b8; }
-#bt-schedule-app .btv-mini { font-family:'Barlow Condensed',sans-serif; font-size:10px; font-weight:700;
-  letter-spacing:.05em; padding:3px 8px; border-radius:3px; border:1px solid #e8eaf0; background:#fff;
-  color:#5a6380; cursor:pointer; }
-#bt-schedule-app .btv-mini:hover { border-color:#1a1f5e; color:#1a1f5e; }
-#bt-schedule-app .btv-ops { display:flex; gap:6px; margin-top:11px; padding-top:10px;
-  border-top:1px solid #f4f5f9; }
-#bt-schedule-app .btv-empty { color:#9ca3b8; font-size:14px; padding:30px 0; text-align:center;
-  grid-column:1/-1; }
+#bt-schedule-app .btv-list { border:1px solid #e8eaf0; border-radius:8px; overflow:hidden; background:#fff; }
+#bt-schedule-app .btv-table { width:100%; border-collapse:collapse; font-size:13px; }
+#bt-schedule-app .btv-table thead th { background:#f4f5f9; text-align:left; padding:8px 12px;
+  font-family:'Barlow Condensed',sans-serif; font-size:10px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:#5a6380; border-bottom:1px solid #e8eaf0; white-space:nowrap; }
+#bt-schedule-app .btv-table tbody td { padding:7px 12px; border-bottom:1px solid #f4f5f9;
+  vertical-align:middle; color:#0f1240; }
+#bt-schedule-app .btv-table tbody tr:hover td { background:#fafbfd; }
+#bt-schedule-app .btv-table tbody tr.btv-open td { background:#f7f8fc; border-bottom-color:transparent; }
+#bt-schedule-app .btv-name { font-weight:600; color:#0f1240; }
+#bt-schedule-app .btv-cat { display:inline-block; margin-left:7px; font-family:'Barlow Condensed',sans-serif;
+  font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#5a6380;
+  background:#f4f5f9; border-radius:20px; padding:1px 7px; vertical-align:1px; }
+#bt-schedule-app .btv-table a { color:#1a1f5e; }
+#bt-schedule-app .btv-mono { font-family:'Barlow',sans-serif; color:#5a6380; white-space:nowrap; }
+#bt-schedule-app .btv-detail td { background:#f7f8fc; padding:0 12px 12px; }
+#bt-schedule-app .btv-detail-in { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:14px; padding:4px 0 2px; }
+#bt-schedule-app .btv-detail h4 { margin:0 0 3px; font-family:'Barlow Condensed',sans-serif; font-size:10px;
+  font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9ca3b8; }
+#bt-schedule-app .btv-detail p { margin:0; font-size:13px; line-height:1.5; color:#5a6380; white-space:pre-line; }
+#bt-schedule-app .btv-caret { background:none; border:none; cursor:pointer; color:#9ca3b8; padding:2px 4px;
+  font-size:12px; line-height:1; }
+#bt-schedule-app .btv-caret:hover { color:#1a1f5e; }
+#bt-schedule-app .btv-acts { display:flex; gap:4px; justify-content:flex-end; white-space:nowrap; }
 #bt-schedule-app .btv-form { grid-column:1/-1; border:2px solid #1a1f5e; border-radius:8px; padding:16px;
   background:#fff; }
 #bt-schedule-app .btv-form .btv-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
@@ -3590,49 +3590,91 @@ function btvRender() {
   document.getElementById('btvCount').textContent =
     list.length + (list.length === 1 ? ' vendor' : ' vendors');
 
-  const html = list.map(btvCard).join('');
-  document.getElementById('btvList').innerHTML =
-    (btvEditing !== null ? btvFormHtml(btvEditing) : '') +
-    (html || '<p class="btv-empty">Nothing matches that.</p>');
+  const form = btvEditing !== null ? btvFormHtml(btvEditing) : '';
+
+  if (!list.length) {
+    document.getElementById('btvList').innerHTML = form +
+      '<p class="btv-empty">Nothing matches that.</p>';
+    return;
+  }
+
+  const table =
+    '<table class="btv-table">' +
+      '<thead><tr>' +
+        '<th style="width:22px;"></th>' +
+        '<th>Vendor</th><th>Phone</th><th>Account&nbsp;#</th>' +
+        '<th>Login</th><th>Password</th><th>Website</th>' +
+        (btvCanEdit ? '<th style="text-align:right;">Edit</th>' : '') +
+      '</tr></thead><tbody>' +
+      list.map(btvRowHtml).join('') +
+      '</tbody></table>';
+
+  document.getElementById('btvList').innerHTML = form + table;
 }
 
-function btvRow(k, v) {
-  if (!v) return '';
-  return '<div class="btv-k">' + k + '</div><div class="btv-v">' + v + '</div>';
-}
+function btvRowHtml(v) {
+  const cols  = btvCanEdit ? 8 : 7;
+  const extra = (v.address || v.notes || v.fax);
 
-function btvCard(v) {
-  const tel  = v.phone ? '<a href="tel:' + btvEsc(v.phone.replace(/[^0-9+*]/g,'')) + '">' + btvEsc(v.phone) + '</a>' : '';
-  const site = v.website ? '<a href="' + btvEsc(v.website) + '" target="_blank" rel="noopener">' +
-               btvEsc(v.website.replace(/^https?:\/\//,'').replace(/\/$/,'')) + '</a>' : '';
+  const tel  = v.phone
+    ? '<a href="tel:' + btvEsc(v.phone.replace(/[^0-9+*]/g,'')) + '">' + btvEsc(v.phone) + '</a>' : '—';
+  const site = v.website
+    ? '<a href="' + btvEsc(v.website) + '" target="_blank" rel="noopener">' +
+      btvEsc(v.website.replace(/^https?:\/\//,'').replace(/\/$/,'').slice(0,28)) + '</a>' : '—';
 
   const secret = v.has_secret
-    ? '<div class="btv-secret" id="btvSec' + v.id + '">' +
-        '<span class="btv-dots">••••••••</span>' +
+    ? '<span class="btv-secret" id="btvSec' + v.id + '">' +
+        '<span class="btv-dots">••••••</span>' +
         '<button type="button" class="btv-mini" onclick="btvReveal(' + v.id + ')">SHOW</button>' +
-      '</div>'
+      '</span>'
+    : '<span style="color:#c9cde0;">—</span>';
+
+  const acts = btvCanEdit
+    ? '<td><div class="btv-acts">' +
+        '<button type="button" class="btv-mini" onclick="btvEdit(' + v.id + ')">EDIT</button>' +
+        '<button type="button" class="btv-mini" onclick="btvDelete(' + v.id + ',\'' +
+          btvEsc(v.name).replace(/'/g,"\\'") + '\')">DEL</button>' +
+      '</div></td>'
     : '';
 
-  return '' +
-    '<div class="btv-card">' +
-      '<h3>' + btvEsc(v.name) + '</h3>' +
-      (v.category ? '<span class="btv-cat">' + btvEsc(v.category) + '</span>' : '') +
-      '<div class="btv-kv">' +
-        btvRow('Phone', tel) +
-        btvRow('Fax', btvEsc(v.fax)) +
-        btvRow('Account', btvEsc(v.account_no)) +
-        btvRow('Login', btvEsc(v.login)) +
-        btvRow('Password', secret) +
-        btvRow('Website', site) +
-        btvRow('Address', btvEsc(v.address).replace(/\n/g,'<br>')) +
-      '</div>' +
-      (v.notes ? '<div class="btv-note">' + btvEsc(v.notes) + '</div>' : '') +
-      (btvCanEdit ?
-        '<div class="btv-ops">' +
-          '<button type="button" class="btv-mini" onclick="btvEdit(' + v.id + ')">EDIT</button>' +
-          '<button type="button" class="btv-mini" onclick="btvDelete(' + v.id + ',\'' + btvEsc(v.name) + '\')">DELETE</button>' +
-        '</div>' : '') +
-    '</div>';
+  const main =
+    '<tr id="btvRow' + v.id + '">' +
+      '<td>' + (extra
+        ? '<button type="button" class="btv-caret" id="btvCaret' + v.id + '" ' +
+          'onclick="btvToggle(' + v.id + ')" title="More">&#9656;</button>'
+        : '') + '</td>' +
+      '<td><span class="btv-name">' + btvEsc(v.name) + '</span>' +
+        (v.category ? '<span class="btv-cat">' + btvEsc(v.category) + '</span>' : '') + '</td>' +
+      '<td class="btv-mono">' + tel + '</td>' +
+      '<td class="btv-mono">' + (btvEsc(v.account_no) || '—') + '</td>' +
+      '<td>' + (btvEsc(v.login) || '—') + '</td>' +
+      '<td>' + secret + '</td>' +
+      '<td>' + site + '</td>' +
+      acts +
+    '</tr>';
+
+  const detail = extra
+    ? '<tr class="btv-detail" id="btvDet' + v.id + '" style="display:none;">' +
+        '<td colspan="' + cols + '"><div class="btv-detail-in">' +
+          (v.address ? '<div><h4>Address</h4><p>' + btvEsc(v.address) + '</p></div>' : '') +
+          (v.fax ? '<div><h4>Fax</h4><p>' + btvEsc(v.fax) + '</p></div>' : '') +
+          (v.notes ? '<div><h4>Notes</h4><p>' + btvEsc(v.notes) + '</p></div>' : '') +
+        '</div></td>' +
+      '</tr>'
+    : '';
+
+  return main + detail;
+}
+
+function btvToggle(id) {
+  const det = document.getElementById('btvDet' + id);
+  const row = document.getElementById('btvRow' + id);
+  const car = document.getElementById('btvCaret' + id);
+  if (!det) return;
+  const open = det.style.display === 'none';
+  det.style.display = open ? '' : 'none';
+  row.classList.toggle('btv-open', open);
+  car.innerHTML = open ? '&#9662;' : '&#9656;';
 }
 
 async function btvReveal(id) {
@@ -3640,13 +3682,13 @@ async function btvReveal(id) {
   try {
     const res = await btFetch('/vendors/' + id + '/secret', 'POST', {});
     box.innerHTML =
-      '<code style="font-size:13px;color:#0f1240;word-break:break-all;">' + btvEsc(res.secret) + '</code>' +
+      '<code style="font-size:13px;color:#0f1240;">' + btvEsc(res.secret) + '</code>' +
       '<button type="button" class="btv-mini" onclick="btvCopy(' + id + ',\'' +
         btvEsc(res.secret).replace(/'/g,"\\'") + '\')">COPY</button>';
     // Don't leave it sitting on screen for the next person at that machine.
     setTimeout(() => {
       const b = document.getElementById('btvSec' + id);
-      if (b) b.innerHTML = '<span class="btv-dots">••••••••</span>' +
+      if (b) b.innerHTML = '<span class="btv-dots">••••••</span>' +
         '<button type="button" class="btv-mini" onclick="btvReveal(' + id + ')">SHOW</button>';
     }, 30000);
   } catch (e) {
