@@ -1,6 +1,6 @@
 <?php
 /**
- * BT Portal — Portal users, login gate, and identity.
+ * BT Portal — Portal users, login gate, password setup, and identity.
  *
  * Replaces two things that used to stand in for a login:
  *   1. The WordPress page password on /employees/  -> a real login screen.
@@ -12,12 +12,19 @@
  * strings like "Dillon" and "Boomer", so every portal account carries a
  * btp_legacy_name meta field. btp_actor_name() prefers it, which keeps new
  * rows matching the old ones instead of splitting the history in two.
+ *
+ * Two portal roles:
+ *   bt_portal_user  — can open the portal.
+ *   bt_portal_admin — can open the portal AND create/manage portal logins,
+ *                     without being a WordPress administrator.
  */
 
 if (!defined('ABSPATH')) exit;
 
 define('BTP_ROLE', 'bt_portal_user');
-define('BTP_ROLES_VERSION', '1');
+define('BTP_ROLE_ADMIN', 'bt_portal_admin');
+define('BTP_ROLES_VERSION', '2');
+define('BTP_RP_COOKIE', 'btp-setpass-' . COOKIEHASH);
 
 /** The names that were hardcoded in the header dropdown before v0.21.0. */
 function btp_legacy_names() {
@@ -25,7 +32,7 @@ function btp_legacy_names() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   ROLE + CAPABILITIES
+   ROLES + CAPABILITIES
    ───────────────────────────────────────────────────────────────────── */
 
 function btp_register_roles() {
@@ -35,6 +42,13 @@ function btp_register_roles() {
     add_role(BTP_ROLE, 'Portal User', array(
         'read'             => true,
         'bt_portal_access' => true,
+    ));
+
+    remove_role(BTP_ROLE_ADMIN);
+    add_role(BTP_ROLE_ADMIN, 'Portal Admin', array(
+        'read'                   => true,
+        'bt_portal_access'       => true,
+        'bt_manage_portal_users' => true,
     ));
 
     if ($admin = get_role('administrator')) {
@@ -51,6 +65,11 @@ function btp_user_can_access() {
     return is_user_logged_in() && current_user_can('bt_portal_access');
 }
 
+/** Both portal roles, for user queries. */
+function btp_portal_roles() {
+    return array(BTP_ROLE, BTP_ROLE_ADMIN);
+}
+
 /**
  * The name to stamp on jobs, day notes, exchanges and Woo completions.
  * Falls back to display_name for accounts with no legacy mapping.
@@ -62,8 +81,72 @@ function btp_actor_name() {
     return $legacy ? $legacy : $user->display_name;
 }
 
+function btp_client_ip() {
+    return isset($_SERVER['REMOTE_ADDR'])
+        ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
+        : '0.0.0.0';
+}
+
+function btp_current_url() {
+    global $wp;
+    return home_url(add_query_arg(array(), $wp->request));
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
-   LOGIN — handled on template_redirect so cookies go out before any output
+   INVITE + RESET EMAILS — point at the portal, not wp-login.php
+   ───────────────────────────────────────────────────────────────────── */
+
+/** The portal URL that opens the "pick a password" screen for this key. */
+function btp_setpass_url($user_login, $key) {
+    return add_query_arg(array(
+        'btp_login' => rawurlencode($user_login),
+        'btp_key'   => rawurlencode($key),
+    ), btp_portal_base_url());
+}
+
+/**
+ * New portal account -> "set your password" email pointing at the portal.
+ * Non-portal accounts keep WordPress's default email untouched.
+ */
+function btp_new_user_email($email, $user, $blogname) {
+    if (!is_a($user, 'WP_User') || !user_can($user, 'bt_portal_access')) return $email;
+
+    $key = get_password_reset_key($user);
+    if (is_wp_error($key)) return $email;
+
+    $url  = btp_setpass_url($user->user_login, $key);
+    $name = $user->display_name ? $user->display_name : $user->user_login;
+
+    $email['subject'] = sprintf('[%s] Set up your portal login', $blogname);
+    $email['message'] =
+        "Hi $name,\n\n" .
+        "An account has been created for you on the Boomer T's employee portal.\n\n" .
+        "Your username: {$user->user_login}\n\n" .
+        "Click below to pick your password and sign in. The link is good for 24 hours:\n\n" .
+        $url . "\n\n" .
+        "If the link has expired, open the portal, click \"Forgot your password?\" and a fresh one will be sent.\n";
+
+    return $email;
+}
+add_filter('wp_new_user_notification_email', 'btp_new_user_email', 10, 3);
+
+/** Forgot-password and "Send reset" mails also land on the portal screen. */
+function btp_reset_message($message, $key, $user_login, $user_data) {
+    if (!is_a($user_data, 'WP_User') || !user_can($user_data, 'bt_portal_access')) return $message;
+
+    $url = btp_setpass_url($user_login, $key);
+    return "Hi,\n\n" .
+        "Someone asked to reset the password for your Boomer T's portal account.\n\n" .
+        "Your username: {$user_login}\n\n" .
+        "If that wasn't you, ignore this email and nothing changes. To pick a new password:\n\n" .
+        $url . "\n\n" .
+        "The link is good for 24 hours.\n";
+}
+add_filter('retrieve_password_message', 'btp_reset_message', 10, 4);
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LOGIN + SET PASSWORD
+   Both run on template_redirect so cookies go out before any page output.
    ───────────────────────────────────────────────────────────────────── */
 
 function btp_handle_login() {
@@ -73,7 +156,7 @@ function btp_handle_login() {
     $login = sanitize_user(wp_unslash($_POST['btp_user'] ?? ''));
     $key   = 'btp_fail_' . md5($login . '|' . btp_client_ip());
 
-    // Five bad tries on the same user+IP buys a 15 minute cooldown.
+    // Five bad tries on the same user+device buys a 15 minute cooldown.
     if ((int) get_transient($key) >= 5) {
         $GLOBALS['btp_login_error'] = 'Too many attempts. Try again in 15 minutes.';
         return;
@@ -105,41 +188,99 @@ function btp_handle_login() {
 }
 add_action('template_redirect', 'btp_handle_login', 5);
 
-function btp_client_ip() {
-    return isset($_SERVER['REMOTE_ADDR'])
-        ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
-        : '0.0.0.0';
+/**
+ * The set-a-password flow.
+ *
+ * Arriving from the email link, the key is moved straight out of the address
+ * bar into a short-lived cookie — same approach core uses — so it can't leak
+ * through a referrer header, a shoulder, or a shared browser history.
+ */
+function btp_handle_setpass() {
+    // Step 1 — hand-off from the email link.
+    if (isset($_GET['btp_key'], $_GET['btp_login'])) {
+        // Whoever is signed in on this browser isn't necessarily the person the
+        // link was mailed to — a shared shop computer usually isn't. Clear the
+        // session so the screen actually shows.
+        if (is_user_logged_in()) wp_logout();
+
+        $value = sanitize_text_field(wp_unslash($_GET['btp_login'])) . ':' .
+                 sanitize_text_field(wp_unslash($_GET['btp_key']));
+        setcookie(BTP_RP_COOKIE, $value, 0, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true);
+        wp_safe_redirect(add_query_arg('btp_action', 'setpass', btp_portal_base_url()));
+        exit;
+    }
+
+    if (($_GET['btp_action'] ?? '') !== 'setpass') return;
+    if (empty($_POST['btp_setpass_submit'])) return;
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'btp_setpass')) return;
+
+    $user = btp_setpass_user();
+    if (is_wp_error($user)) {
+        $GLOBALS['btp_setpass_error'] = 'That link has expired. Request a new one below.';
+        return;
+    }
+
+    $p1 = (string) ($_POST['btp_pass1'] ?? '');
+    $p2 = (string) ($_POST['btp_pass2'] ?? '');
+
+    if ($p1 !== $p2)      { $GLOBALS['btp_setpass_error'] = 'Those two passwords don\'t match.'; return; }
+    if (strlen($p1) < 8)  { $GLOBALS['btp_setpass_error'] = 'Use at least 8 characters.'; return; }
+
+    reset_password($user, $p1);
+    setcookie(BTP_RP_COOKIE, ' ', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true);
+
+    // Straight into the portal — no second login screen right after setting it.
+    wp_set_auth_cookie($user->ID, true, is_ssl());
+    wp_set_current_user($user->ID);
+    wp_safe_redirect(btp_portal_base_url());
+    exit;
+}
+add_action('template_redirect', 'btp_handle_setpass', 4);
+
+/** Resolve the pending reset cookie to a user, or a WP_Error. */
+function btp_setpass_user() {
+    if (empty($_COOKIE[BTP_RP_COOKIE]) || strpos($_COOKIE[BTP_RP_COOKIE], ':') === false) {
+        return new WP_Error('btp_no_key', 'No password reset in progress.');
+    }
+    list($login, $key) = explode(':', wp_unslash($_COOKIE[BTP_RP_COOKIE]), 2);
+    return check_password_reset_key($key, $login);
 }
 
-function btp_current_url() {
-    global $wp;
-    return home_url(add_query_arg(array(), $wp->request));
+/** True when the current request is the set-a-password screen. */
+function btp_is_setpass_request() {
+    return ($_GET['btp_action'] ?? '') === 'setpass';
 }
 
-/** The login screen, styled to match the portal header. Returns HTML. */
+/* ─────────────────────────────────────────────────────────────────────────
+   THE GATE SCREENS
+   ───────────────────────────────────────────────────────────────────── */
+
+/** Entry point for the shortcode when the visitor has no portal access. */
 function btp_login_form_html() {
-    $error = $GLOBALS['btp_login_error'] ?? '';
+    return btp_is_setpass_request() ? btp_setpass_form_html() : btp_login_screen_html();
+}
+
+function btp_login_screen_html() {
+    $error  = $GLOBALS['btp_login_error'] ?? '';
+    $notice = isset($_GET['btp_reset']) ? 'Password saved. Sign in with it below.' : '';
     ob_start();
     ?>
 <div id="btp-login">
   <form method="post" class="btp-login-card">
     <div class="btp-login-brand">EMPLOYEE <span>PORTAL</span></div>
 
-    <?php if ($error) : ?>
-      <div class="btp-login-error"><?php echo esc_html($error); ?></div>
-    <?php endif; ?>
+    <?php if ($error) : ?><div class="btp-login-error"><?php echo esc_html($error); ?></div><?php endif; ?>
+    <?php if ($notice) : ?><div class="btp-login-ok"><?php echo esc_html($notice); ?></div><?php endif; ?>
 
     <?php wp_nonce_field('btp_login'); ?>
 
     <label for="btp_user">Username</label>
     <input type="text" name="btp_user" id="btp_user" required autofocus
-           autocapitalize="none" autocorrect="off" spellcheck="false"
-           autocomplete="username"
+           autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username"
            value="<?php echo esc_attr(wp_unslash($_POST['btp_user'] ?? '')); ?>">
 
     <label for="btp_pass">Password</label>
-    <input type="password" name="btp_pass" id="btp_pass" required
-           autocomplete="current-password">
+    <input type="password" name="btp_pass" id="btp_pass" required autocomplete="current-password">
 
     <label class="btp-login-remember">
       <input type="checkbox" name="btp_remember" value="1" checked>
@@ -152,6 +293,67 @@ function btp_login_form_html() {
        href="<?php echo esc_url(wp_lostpassword_url(btp_current_url())); ?>">Forgot your password?</a>
   </form>
 </div>
+<?php echo btp_login_styles(); ?>
+    <?php
+    return ob_get_clean();
+}
+
+function btp_setpass_form_html() {
+    $user  = btp_setpass_user();
+    $error = $GLOBALS['btp_setpass_error'] ?? '';
+    $dead  = is_wp_error($user);
+
+    ob_start();
+    ?>
+<div id="btp-login">
+  <form method="post" class="btp-login-card">
+    <div class="btp-login-brand">EMPLOYEE <span>PORTAL</span></div>
+
+    <?php if ($dead) : ?>
+      <div class="btp-login-error">That link has expired or has already been used.</div>
+      <p class="btp-login-help">Password links are good for 24 hours. Ask for a fresh one and it will
+        arrive by email in a minute or two.</p>
+      <a class="btp-login-btnlink"
+         href="<?php echo esc_url(wp_lostpassword_url(btp_portal_base_url())); ?>">SEND ME A NEW LINK</a>
+    <?php else : ?>
+      <p class="btp-login-help">Welcome, <strong><?php echo esc_html($user->display_name); ?></strong>.
+        Pick a password and you&rsquo;re in. Your username is
+        <strong><?php echo esc_html($user->user_login); ?></strong>.</p>
+
+      <?php if ($error) : ?><div class="btp-login-error"><?php echo esc_html($error); ?></div><?php endif; ?>
+
+      <?php wp_nonce_field('btp_setpass'); ?>
+
+      <label for="btp_pass1">New password</label>
+      <input type="password" name="btp_pass1" id="btp_pass1" required autofocus
+             autocomplete="new-password" minlength="8">
+
+      <label for="btp_pass2">Confirm password</label>
+      <input type="password" name="btp_pass2" id="btp_pass2" required
+             autocomplete="new-password" minlength="8">
+
+      <label class="btp-login-remember">
+        <input type="checkbox" onclick="
+          var t = this.checked ? 'text' : 'password';
+          document.getElementById('btp_pass1').type = t;
+          document.getElementById('btp_pass2').type = t;">
+        Show password
+      </label>
+
+      <button type="submit" name="btp_setpass_submit" value="1">SAVE AND SIGN IN</button>
+      <p class="btp-login-help btp-login-fine">At least 8 characters. Anything you&rsquo;ll actually
+        remember beats something clever you won&rsquo;t.</p>
+    <?php endif; ?>
+  </form>
+</div>
+<?php echo btp_login_styles(); ?>
+    <?php
+    return ob_get_clean();
+}
+
+/** Shared styling for both gate screens. */
+function btp_login_styles() {
+    return <<<'CSS'
 <style>
 #btp-login { font-family:'Barlow',sans-serif; background:#f5f5f5; min-height:70vh;
   display:flex; align-items:center; justify-content:center; padding:40px 16px; }
@@ -162,9 +364,12 @@ function btp_login_form_html() {
 #btp-login .btp-login-brand span { color:#e91e8c; }
 #btp-login .btp-login-error { background:#fdecea; border-left:3px solid #c0392b; color:#7d2018;
   padding:9px 12px; font-size:13px; margin-bottom:16px; border-radius:3px; }
+#btp-login .btp-login-ok { background:#eaf7ee; border-left:3px solid #2e7d32; color:#1b5e20;
+  padding:9px 12px; font-size:13px; margin-bottom:16px; border-radius:3px; }
+#btp-login .btp-login-help { font-size:13px; line-height:1.5; color:#5a6380; margin:0 0 18px; }
+#btp-login .btp-login-fine { margin:14px 0 0; font-size:12px; color:#9ca3b8; }
 #btp-login label { display:block; font-family:'Barlow Condensed',sans-serif; font-size:12px;
-  font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#5a6380;
-  margin:14px 0 5px; }
+  font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#5a6380; margin:14px 0 5px; }
 #btp-login input[type=text], #btp-login input[type=password] { width:100%; box-sizing:border-box;
   padding:11px 12px; font-size:16px; font-family:'Barlow',sans-serif; border:1px solid #e8eaf0;
   border-radius:5px; background:#f4f5f9; outline:none; }
@@ -173,31 +378,32 @@ function btp_login_form_html() {
   text-transform:none; letter-spacing:0; font-family:'Barlow',sans-serif; font-size:13px;
   font-weight:400; color:#5a6380; }
 #btp-login .btp-login-remember input { margin:0; }
-#btp-login button { width:100%; margin-top:20px; padding:12px; border:none; border-radius:5px;
-  background:#1a1f5e; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:14px;
-  font-weight:700; letter-spacing:.08em; cursor:pointer; transition:background .15s; }
-#btp-login button:hover { background:#232875; }
+#btp-login button, #btp-login .btp-login-btnlink { display:block; width:100%; box-sizing:border-box;
+  margin-top:20px; padding:12px; border:none; border-radius:5px; background:#1a1f5e; color:#fff;
+  font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:700; letter-spacing:.08em;
+  text-align:center; text-decoration:none; cursor:pointer; transition:background .15s; }
+#btp-login button:hover, #btp-login .btp-login-btnlink:hover { background:#232875; }
 #btp-login .btp-login-forgot { display:block; text-align:center; margin-top:16px; font-size:12px;
   color:#9ca3b8; text-decoration:none; }
 #btp-login .btp-login-forgot:hover { color:#e91e8c; }
 </style>
-    <?php
-    return ob_get_clean();
+CSS;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   ADMIN SCREEN — BT Portal > Portal Users
+   ADMIN SCREEN — Portal Users
+   Under BT Portal for WordPress admins; its own top-level menu for portal
+   admins, who can manage logins without seeing the rest of the settings.
    ───────────────────────────────────────────────────────────────────── */
 
 function btp_users_menu() {
-    add_submenu_page(
-        'bt-portal',
-        'Portal Users',
-        'Portal Users',
-        'bt_manage_portal_users',
-        'bt-portal-users',
-        'btp_users_page'
-    );
+    if (current_user_can('manage_options')) {
+        add_submenu_page('bt-portal', 'Portal Users', 'Portal Users',
+            'bt_manage_portal_users', 'bt-portal-users', 'btp_users_page');
+    } elseif (current_user_can('bt_manage_portal_users')) {
+        add_menu_page('Portal Users', 'Portal Users', 'bt_manage_portal_users',
+            'bt-portal-users', 'btp_users_page', 'dashicons-groups', 58);
+    }
 }
 add_action('admin_menu', 'btp_users_menu', 20);
 
@@ -208,9 +414,8 @@ function btp_users_page() {
 
     btp_users_handle_post();
 
-    $users = get_users(array('role' => BTP_ROLE, 'orderby' => 'display_name', 'number' => 200));
+    $users = get_users(array('role__in' => btp_portal_roles(), 'orderby' => 'display_name', 'number' => 200));
 
-    // Which of the old dropdown names nobody has claimed yet.
     $claimed = array();
     foreach ($users as $u) {
         $l = get_user_meta($u->ID, 'btp_legacy_name', true);
@@ -220,10 +425,11 @@ function btp_users_page() {
     ?>
     <div class="wrap">
       <h1>Portal Users</h1>
-      <p class="description" style="max-width:660px;">
+      <p class="description" style="max-width:680px;">
         Each person gets their own login instead of the shared page password and the
-        &ldquo;Who are you?&rdquo; dropdown. <strong>Old name</strong> ties the account to the
-        name already stored on that person&rsquo;s existing jobs and notes &mdash; set it or their
+        &ldquo;Who are you?&rdquo; dropdown. Leave the password blank and they get an email
+        to pick their own on the portal login page. <strong>Old name</strong> ties the account
+        to the name already stored on that person&rsquo;s jobs and notes &mdash; set it, or their
         history splits in two.
       </p>
 
@@ -243,14 +449,24 @@ function btp_users_page() {
         <table class="form-table" role="presentation">
           <tr>
             <th scope="row"><label for="btp_new_login">Username</label></th>
-            <td><input name="btp_new_login" id="btp_new_login" type="text" class="regular-text"
-                       required autocomplete="off">
+            <td><input name="btp_new_login" id="btp_new_login" type="text" class="regular-text" required autocomplete="off">
               <p class="description">What they type to log in. Cannot be changed later.</p></td>
           </tr>
           <tr>
             <th scope="row"><label for="btp_new_email">Email</label></th>
-            <td><input name="btp_new_email" id="btp_new_email" type="email" class="regular-text"
-                       required autocomplete="off"></td>
+            <td><input name="btp_new_email" id="btp_new_email" type="email" class="regular-text" required autocomplete="off">
+              <p class="description">The invite goes here, so it has to be an inbox they can open.</p></td>
+          </tr>
+          <tr>
+            <th scope="row"><label for="btp_new_role">Access</label></th>
+            <td>
+              <select name="btp_new_role" id="btp_new_role">
+                <option value="<?php echo esc_attr(BTP_ROLE); ?>">Portal user &mdash; can use the portal</option>
+                <option value="<?php echo esc_attr(BTP_ROLE_ADMIN); ?>">Portal admin &mdash; can also add and remove logins</option>
+              </select>
+              <p class="description">A portal admin manages logins only. It is not a WordPress
+                administrator and gives no access to the site, plugins or settings.</p>
+            </td>
           </tr>
           <tr>
             <th scope="row"><label for="btp_new_legacy">Old name</label></th>
@@ -258,14 +474,13 @@ function btp_users_page() {
               <select name="btp_new_legacy" id="btp_new_legacy">
                 <option value="">&mdash; none / new employee &mdash;</option>
                 <?php foreach (btp_legacy_names() as $n) : ?>
-                  <option value="<?php echo esc_attr($n); ?>"
-                    <?php disabled(in_array($n, $claimed, true)); ?>>
+                  <option value="<?php echo esc_attr($n); ?>" <?php disabled(in_array($n, $claimed, true)); ?>>
                     <?php echo esc_html($n); ?><?php echo in_array($n, $claimed, true) ? ' (taken)' : ''; ?>
                   </option>
                 <?php endforeach; ?>
               </select>
-              <p class="description">The name from the old header dropdown. Their new work
-                will keep landing under this name.</p>
+              <p class="description">The name from the old header dropdown. Their new work keeps
+                landing under this name.</p>
             </td>
           </tr>
           <tr>
@@ -275,11 +490,10 @@ function btp_users_page() {
           </tr>
           <tr>
             <th scope="row"><label for="btp_new_pass">Password</label></th>
-            <td><input name="btp_new_pass" id="btp_new_pass" type="text" class="regular-text"
-                       autocomplete="new-password">
-              <p class="description"><strong>Leave blank</strong> and they get an email to set their
-                own &mdash; nothing readable is ever stored or sent. Fill it in only if you are
-                handing someone a password in person.</p></td>
+            <td><input name="btp_new_pass" id="btp_new_pass" type="text" class="regular-text" autocomplete="new-password">
+              <p class="description"><strong>Leave blank</strong> and they get an email link to pick
+                their own on the portal &mdash; nothing readable is stored or sent. Fill it in only if
+                you are handing someone a password in person.</p></td>
           </tr>
         </table>
         <?php submit_button('Create Portal User'); ?>
@@ -290,18 +504,23 @@ function btp_users_page() {
       <h2>Portal users (<?php echo count($users); ?>)</h2>
       <table class="wp-list-table widefat fixed striped">
         <thead><tr>
-          <th>Username</th><th>Display name</th><th>Old name</th>
-          <th>Email</th><th>Last login</th><th>Actions</th>
+          <th>Username</th><th>Display name</th><th>Access</th><th>Old name</th>
+          <th>Email</th><th>Last login</th><th style="width:280px;">Actions</th>
         </tr></thead>
         <tbody>
         <?php if (!$users) : ?>
-          <tr><td colspan="6">No portal users yet. Nobody but an administrator can open the portal.</td></tr>
+          <tr><td colspan="7">No portal users yet. Nobody but a WordPress administrator can open the portal.</td></tr>
         <?php else : foreach ($users as $u) :
-          $last   = get_user_meta($u->ID, 'btp_last_login', true);
-          $legacy = get_user_meta($u->ID, 'btp_legacy_name', true); ?>
+          $last     = get_user_meta($u->ID, 'btp_last_login', true);
+          $legacy   = get_user_meta($u->ID, 'btp_legacy_name', true);
+          $is_admin = in_array(BTP_ROLE_ADMIN, (array) $u->roles, true);
+          $is_self  = ((int) $u->ID === get_current_user_id()); ?>
           <tr>
             <td><strong><?php echo esc_html($u->user_login); ?></strong></td>
             <td><?php echo esc_html($u->display_name); ?></td>
+            <td><?php echo $is_admin
+                  ? '<span style="color:#1a1f5e;font-weight:600;">Portal admin</span>'
+                  : 'Portal user'; ?></td>
             <td><?php echo $legacy ? esc_html($legacy) : '&mdash;'; ?></td>
             <td><?php echo esc_html($u->user_email); ?></td>
             <td><?php echo $last ? esc_html(date_i18n('M j, g:i a', (int) $last)) : '&mdash;'; ?></td>
@@ -310,7 +529,16 @@ function btp_users_page() {
                 <?php wp_nonce_field('btp_user_row_' . $u->ID); ?>
                 <input type="hidden" name="btp_user_id" value="<?php echo (int) $u->ID; ?>">
                 <button class="button button-small" name="btp_admin_action" value="reset">Send reset</button>
+                <?php if ($is_admin) : ?>
+                  <button class="button button-small" name="btp_admin_action" value="demote"
+                    <?php disabled($is_self); ?>
+                    title="<?php echo $is_self ? 'You cannot remove your own admin access' : ''; ?>">
+                    Remove admin</button>
+                <?php else : ?>
+                  <button class="button button-small" name="btp_admin_action" value="promote">Make admin</button>
+                <?php endif; ?>
                 <button class="button button-small" name="btp_admin_action" value="remove"
+                  <?php disabled($is_self); ?>
                   onclick="return confirm('Remove portal access for <?php echo esc_js($u->user_login); ?>?')">
                   Remove access</button>
               </form>
@@ -337,8 +565,16 @@ function btp_users_handle_post() {
     if (!$user_id) return;
     check_admin_referer('btp_user_row_' . $user_id);
 
-    if ($action === 'reset')  btp_users_send_reset($user_id);
-    if ($action === 'remove') btp_users_remove($user_id);
+    // Nobody talks themselves out of their own access by accident.
+    if (in_array($action, array('demote', 'remove'), true) && $user_id === get_current_user_id()) {
+        btp_users_notice('You cannot change your own access here.', 'error');
+        return;
+    }
+
+    if ($action === 'reset')   btp_users_send_reset($user_id);
+    if ($action === 'remove')  btp_users_remove($user_id);
+    if ($action === 'promote') btp_users_set_role($user_id, BTP_ROLE_ADMIN);
+    if ($action === 'demote')  btp_users_set_role($user_id, BTP_ROLE);
 }
 
 function btp_users_add() {
@@ -346,7 +582,10 @@ function btp_users_add() {
     $email  = sanitize_email(wp_unslash($_POST['btp_new_email'] ?? ''));
     $name   = sanitize_text_field(wp_unslash($_POST['btp_new_name'] ?? ''));
     $legacy = sanitize_text_field(wp_unslash($_POST['btp_new_legacy'] ?? ''));
+    $role   = sanitize_key(wp_unslash($_POST['btp_new_role'] ?? BTP_ROLE));
     $pass   = (string) ($_POST['btp_new_pass'] ?? '');   // not sanitized, on purpose
+
+    if (!in_array($role, btp_portal_roles(), true)) $role = BTP_ROLE;
 
     if (!$login || !is_email($email)) {
         btp_users_notice('A valid username and email are both required.', 'error');
@@ -364,7 +603,7 @@ function btp_users_add() {
         'user_email'   => $email,
         'user_pass'    => $pass,
         'display_name' => $name ? $name : ($legacy ? $legacy : $login),
-        'role'         => BTP_ROLE,
+        'role'         => $role,
     ));
 
     // Don't keep the plain text around any longer than the insert needs it.
@@ -378,18 +617,33 @@ function btp_users_add() {
 
     if ($legacy) update_user_meta($user_id, 'btp_legacy_name', $legacy);
 
+    $label = ($role === BTP_ROLE_ADMIN) ? 'Portal admin' : 'Portal user';
+
     if ($self_set) {
-        wp_new_user_notification($user_id, null, 'user');   // set-password link, no plain text
-        btp_users_notice('User created. A set-your-password email is on its way to ' . $email . '.');
+        wp_new_user_notification($user_id, null, 'user');
+        btp_users_notice($label . ' created. An invite is on its way to ' . $email .
+            ' — the link opens the portal and lets them pick their own password.');
     } else {
-        btp_users_notice('User created with the password you typed. Hand it over in person and have them change it.');
+        btp_users_notice($label . ' created with the password you typed. Hand it over in person and have them change it.');
     }
 }
 
 function btp_users_send_reset($user_id) {
     if (!($user = get_userdata($user_id))) return;
     retrieve_password($user->user_login);
-    btp_users_notice('Password reset email sent to ' . $user->user_email . '.');
+    btp_users_notice('Password link sent to ' . $user->user_email . '. Good for 24 hours.');
+}
+
+function btp_users_set_role($user_id, $role) {
+    if (!($user = get_userdata($user_id))) return;
+    if (!in_array($role, btp_portal_roles(), true)) return;
+
+    foreach (btp_portal_roles() as $r) $user->remove_role($r);
+    $user->add_role($role);
+
+    btp_users_notice($role === BTP_ROLE_ADMIN
+        ? $user->user_login . ' can now add and remove portal logins.'
+        : $user->user_login . ' is back to a regular portal user.');
 }
 
 /**
@@ -398,7 +652,7 @@ function btp_users_send_reset($user_id) {
  */
 function btp_users_remove($user_id) {
     if (!($user = get_userdata($user_id))) return;
-    $user->remove_role(BTP_ROLE);
+    foreach (btp_portal_roles() as $r) $user->remove_role($r);
     btp_users_notice('Portal access removed for ' . $user->user_login . '. The account still exists.');
 }
 
