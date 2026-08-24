@@ -756,6 +756,143 @@ function btp_users_notice($message, $type = 'success') {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   REST — the in-portal account panel
+
+   Everything here is capability-checked. Note that the older boomerts/v1
+   routes in rest.php still use __return_true, from back when the portal had
+   no login at all; these new routes deliberately do not follow that pattern.
+   ───────────────────────────────────────────────────────────────────── */
+
+function btp_rest_can_access() {
+    return is_user_logged_in() && current_user_can('bt_portal_access');
+}
+
+function btp_rest_can_manage() {
+    return is_user_logged_in() && current_user_can('bt_manage_portal_users');
+}
+
+add_action('rest_api_init', function() {
+    $ns = 'boomerts/v1';
+
+    register_rest_route($ns, '/account', array(
+        'methods' => 'GET', 'callback' => 'btp_rest_account',
+        'permission_callback' => 'btp_rest_can_access'));
+
+    register_rest_route($ns, '/account/reset', array(
+        'methods' => 'POST', 'callback' => 'btp_rest_account_reset',
+        'permission_callback' => 'btp_rest_can_access'));
+
+    register_rest_route($ns, '/account/users', array(
+        'methods' => 'GET', 'callback' => 'btp_rest_users',
+        'permission_callback' => 'btp_rest_can_manage'));
+
+    register_rest_route($ns, '/account/users/(?P<id>\d+)', array(
+        'methods' => 'POST', 'callback' => 'btp_rest_user_save',
+        'permission_callback' => 'btp_rest_can_manage'));
+
+    register_rest_route($ns, '/account/users/(?P<id>\d+)/reset', array(
+        'methods' => 'POST', 'callback' => 'btp_rest_user_reset',
+        'permission_callback' => 'btp_rest_can_manage'));
+});
+
+/** Shape one user for the panel. */
+function btp_rest_user_row($u) {
+    $legacy = get_user_meta($u->ID, 'btp_legacy_name', true);
+    $last   = get_user_meta($u->ID, 'btp_last_login', true);
+    return array(
+        'id'       => (int) $u->ID,
+        'login'    => $u->user_login,
+        'email'    => $u->user_email,
+        'name'     => $u->display_name,
+        'legacy'   => $legacy ? $legacy : '',
+        'shown'    => $legacy ? $legacy : $u->display_name,
+        'access'   => btp_access_label($u),
+        'last'     => $last ? date_i18n('M j, g:i a', (int) $last) : '',
+        'is_self'  => ((int) $u->ID === get_current_user_id()),
+    );
+}
+
+function btp_rest_account() {
+    $u = wp_get_current_user();
+    $row = btp_rest_user_row($u);
+    $row['can_manage']    = current_user_can('bt_manage_portal_users');
+    $row['legacy_names']  = btp_legacy_names();
+    return rest_ensure_response($row);
+}
+
+function btp_rest_account_reset() {
+    $u = wp_get_current_user();
+    $sent = retrieve_password($u->user_login);
+    if (is_wp_error($sent)) {
+        return new WP_Error('btp_reset_failed', 'Could not send the email. Try again shortly.', array('status' => 500));
+    }
+    return rest_ensure_response(array('ok' => true, 'email' => $u->user_email));
+}
+
+function btp_rest_users() {
+    $out = array();
+    foreach (btp_all_portal_users() as $u) $out[] = btp_rest_user_row($u);
+    return rest_ensure_response(array('users' => $out, 'legacy_names' => btp_legacy_names()));
+}
+
+function btp_rest_user_save($req) {
+    $id = (int) $req['id'];
+    if (!($user = get_userdata($id))) {
+        return new WP_Error('btp_no_user', 'No such user.', array('status' => 404));
+    }
+
+    $p      = $req->get_json_params();
+    $name   = sanitize_text_field($p['name'] ?? '');
+    $email  = sanitize_email($p['email'] ?? '');
+    $legacy = sanitize_text_field($p['legacy'] ?? '');
+
+    if ($name === '') {
+        return new WP_Error('btp_bad_name', 'A name is required.', array('status' => 400));
+    }
+    if ($email === '' || !is_email($email)) {
+        return new WP_Error('btp_bad_email', 'That email address is not valid.', array('status' => 400));
+    }
+
+    // email_exists returns the owner's id, so an unchanged address is fine.
+    $owner = email_exists($email);
+    if ($owner && (int) $owner !== $id) {
+        return new WP_Error('btp_email_taken', 'Another account already uses that email.', array('status' => 409));
+    }
+
+    $update = array('ID' => $id);
+    if ($name !== $user->display_name)   $update['display_name'] = $name;
+    if ($email !== $user->user_email)    $update['user_email']   = $email;
+
+    if (count($update) > 1) {
+        $res = wp_update_user($update);
+        if (is_wp_error($res)) {
+            return new WP_Error('btp_save_failed', $res->get_error_message(), array('status' => 400));
+        }
+    }
+
+    $current = get_user_meta($id, 'btp_legacy_name', true);
+    if ($legacy === '') {
+        delete_user_meta($id, 'btp_legacy_name');
+    } elseif ($legacy !== $current) {
+        update_user_meta($id, 'btp_legacy_name', $legacy);
+    }
+
+    return rest_ensure_response(btp_rest_user_row(get_userdata($id)));
+}
+
+function btp_rest_user_reset($req) {
+    $id = (int) $req['id'];
+    if (!($user = get_userdata($id))) {
+        return new WP_Error('btp_no_user', 'No such user.', array('status' => 404));
+    }
+    $sent = retrieve_password($user->user_login);
+    if (is_wp_error($sent)) {
+        return new WP_Error('btp_reset_failed', 'Could not send the email. Try again shortly.', array('status' => 500));
+    }
+    return rest_ensure_response(array('ok' => true, 'email' => $user->user_email));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    LAST LOGIN STAMP
    ───────────────────────────────────────────────────────────────────── */
 

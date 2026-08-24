@@ -87,6 +87,66 @@ add_shortcode( 'bt_schedule', function() {
   color:rgba(255,255,255,.45); font-family:'Barlow Condensed',sans-serif; font-size:10px;
   font-weight:700; letter-spacing:.06em; text-decoration:none; transition:color .15s; }
 #bt-schedule-app .btp-signout:hover { color:var(--pink-light); }
+#bt-schedule-app .btp-whoami { cursor:pointer; }
+#bt-schedule-app .btp-whoami:hover { border-color:var(--pink-light); color:#fff; }
+
+/* ── ACCOUNT PANEL ── */
+#btpAcctBg { display:none; position:fixed; inset:0; background:rgba(15,18,64,.55); z-index:999998; }
+#btpAcctPanel { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:min(680px,94vw); max-height:88vh; background:#fff; border-radius:8px; z-index:999999;
+  box-shadow:0 18px 60px rgba(15,18,64,.4); font-family:'Barlow',sans-serif; overflow:hidden;
+  flex-direction:column; }
+#btpAcctPanel .btp-acct-head { display:flex; align-items:center; justify-content:space-between;
+  background:#1a1f5e; color:#fff; padding:14px 18px; flex-shrink:0; }
+#btpAcctPanel .btp-acct-head h3 { margin:0; font-family:'Oswald',sans-serif; font-size:15px;
+  font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+#btpAcctPanel .btp-acct-head button { background:none; border:none; color:rgba(255,255,255,.7);
+  font-size:26px; line-height:1; cursor:pointer; padding:0 4px; }
+#btpAcctPanel .btp-acct-head button:hover { color:#fff; }
+#btpAcctPanel .btp-acct-body { padding:20px; overflow-y:auto; }
+#btpAcctPanel .btp-acct-field { margin-bottom:14px; }
+#btpAcctPanel label { display:block; font-family:'Barlow Condensed',sans-serif; font-size:11px;
+  font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9ca3b8; margin-bottom:4px; }
+#btpAcctPanel .btp-acct-fixed { font-size:15px; color:#0f1240; background:#f4f5f9;
+  border:1px solid #e8eaf0; border-radius:5px; padding:9px 11px; }
+#btpAcctPanel .btp-acct-note { font-size:12px; color:#9ca3b8; margin:0 0 14px; }
+#btpAcctPanel .btp-acct-btn { display:block; width:100%; padding:11px; border:none; border-radius:5px;
+  background:#1a1f5e; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:13px;
+  font-weight:700; letter-spacing:.07em; cursor:pointer; transition:background .15s; }
+#btpAcctPanel .btp-acct-btn:hover { background:#232875; }
+#btpAcctPanel .btp-acct-btn[disabled] { opacity:.5; cursor:default; }
+#btpAcctPanel .btp-acct-rule { display:flex; align-items:center; gap:10px; margin:26px 0 16px;
+  font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:#9ca3b8; }
+#btpAcctPanel .btp-acct-rule:before, #btpAcctPanel .btp-acct-rule:after { content:''; flex:1;
+  height:1px; background:#e8eaf0; }
+#btpAcctPanel .btp-acct-row { border:1px solid #e8eaf0; border-radius:6px; padding:12px;
+  margin-bottom:10px; }
+#btpAcctPanel .btp-acct-row-top { display:flex; align-items:baseline; gap:8px; margin-bottom:10px;
+  flex-wrap:wrap; }
+#btpAcctPanel .btp-acct-login { font-family:'Barlow Condensed',sans-serif; font-weight:700;
+  font-size:14px; letter-spacing:.04em; text-transform:uppercase; color:#1a1f5e; }
+#btpAcctPanel .btp-acct-tag { font-size:10px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; padding:2px 7px; border-radius:20px; background:#f4f5f9; color:#5a6380; }
+#btpAcctPanel .btp-acct-tag.is-admin { background:#1a1f5e; color:#fff; }
+#btpAcctPanel .btp-acct-last { margin-left:auto; font-size:11px; color:#9ca3b8; }
+#btpAcctPanel .btp-acct-grid { display:grid; grid-template-columns:1fr 1fr 120px; gap:8px; }
+#btpAcctPanel .btp-acct-grid input, #btpAcctPanel .btp-acct-grid select { width:100%;
+  box-sizing:border-box; font-family:'Barlow',sans-serif; font-size:14px; padding:8px 9px;
+  border:1px solid #e8eaf0; border-radius:5px; background:#fff; outline:none; }
+#btpAcctPanel .btp-acct-grid input:focus, #btpAcctPanel .btp-acct-grid select:focus { border-color:#1a1f5e; }
+#btpAcctPanel .btp-acct-actions { display:flex; gap:8px; margin-top:10px; }
+#btpAcctPanel .btp-acct-mini { font-family:'Barlow Condensed',sans-serif; font-size:11px;
+  font-weight:700; letter-spacing:.06em; padding:7px 12px; border-radius:4px; cursor:pointer;
+  border:1px solid #1a1f5e; background:#1a1f5e; color:#fff; }
+#btpAcctPanel .btp-acct-mini.ghost { background:#fff; color:#1a1f5e; }
+#btpAcctPanel .btp-acct-mini[disabled] { opacity:.5; cursor:default; }
+#btpAcctPanel .btp-acct-msg { padding:9px 12px; border-radius:4px; font-size:13px; margin-bottom:14px; }
+#btpAcctPanel .btp-acct-msg.ok { background:#eaf7ee; border-left:3px solid #2e7d32; color:#1b5e20; }
+#btpAcctPanel .btp-acct-msg.err { background:#fdecea; border-left:3px solid #c0392b; color:#7d2018; }
+@media (max-width:640px) {
+  #btpAcctPanel .btp-acct-grid { grid-template-columns:1fr; }
+}
 #bt-schedule-app .header-logo {
   background:var(--navy); padding:10px 20px; display:flex;
   align-items:center; border-right:3px solid var(--pink); flex-shrink:0;
@@ -927,15 +987,49 @@ add_shortcode( 'bt_schedule', function() {
       <h1>EMPLOYEE <span>PORTAL</span></h1>
     </div>
     <div class="bt-header-user">
-      <span class="btp-whoami" title="Signed in">
+      <button type="button" class="btp-whoami" onclick="btpAcctOpen()" title="Your account">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <?php echo esc_html( btp_actor_name() ); ?>
-      </span>
+      </button>
       <a class="btp-signout" href="<?php echo esc_url( wp_logout_url( btp_current_url() ) ); ?>" title="Log out">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         LOG OUT
       </a>
     </div>
+
+    <!-- ACCOUNT PANEL — own id prefix (btpAcct*) so nothing collides with
+         BT Quote's markup when it renders inline in the Quote tab. -->
+    <div id="btpAcctBg" onclick="btpAcctClose()"></div>
+    <div id="btpAcctPanel" role="dialog" aria-label="Your account">
+      <div class="btp-acct-head">
+        <h3>Your account</h3>
+        <button type="button" onclick="btpAcctClose()" aria-label="Close">&times;</button>
+      </div>
+      <div class="btp-acct-body">
+        <div id="btpAcctMsg"></div>
+
+        <div class="btp-acct-me">
+          <div class="btp-acct-field">
+            <label>Username</label>
+            <div class="btp-acct-fixed" id="btpAcctLogin">&mdash;</div>
+          </div>
+          <div class="btp-acct-field">
+            <label>Email</label>
+            <div class="btp-acct-fixed" id="btpAcctEmail">&mdash;</div>
+          </div>
+          <p class="btp-acct-note">Your username and email can only be changed by an admin.</p>
+          <button type="button" class="btp-acct-btn" id="btpAcctResetBtn" onclick="btpAcctResetSelf()">
+            EMAIL ME A PASSWORD RESET LINK
+          </button>
+        </div>
+
+        <div id="btpAcctAdmin" style="display:none;">
+          <div class="btp-acct-rule"><span>Everyone with portal access</span></div>
+          <div id="btpAcctList"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="bt-tools-center">
       <span class="saving-indicator" id="btSavingIndicator"></span>
       <div class="bt-search-wrap" id="btSearchWrap">
@@ -3336,6 +3430,155 @@ function btGoToOverdue() {
 function btDownloadArtFiles() {
   window.location.href = 'https://www.boomerts.com/wp-content/uploads/2026/03/btart-open.zip';
 }
+
+/* ── ACCOUNT PANEL ──
+   Opened from the name in the header. Everyone sees their own username and
+   email read-only plus a self-serve password reset; anyone with
+   bt_manage_portal_users also gets the full list to edit.
+   All five routes are capability-checked server side — the panel hiding a
+   control is convenience, not the security boundary. */
+
+let btpAcctData = null;
+
+function btpAcctOpen() {
+  document.getElementById('btpAcctBg').style.display = 'block';
+  document.getElementById('btpAcctPanel').style.display = 'flex';
+  btpAcctMsg('');
+  btpAcctLoad();
+}
+
+function btpAcctClose() {
+  document.getElementById('btpAcctBg').style.display = 'none';
+  document.getElementById('btpAcctPanel').style.display = 'none';
+}
+
+function btpAcctMsg(text, kind) {
+  const el = document.getElementById('btpAcctMsg');
+  el.innerHTML = text ? '<div class="btp-acct-msg ' + (kind || 'ok') + '">' + btpAcctEsc(text) + '</div>' : '';
+}
+
+function btpAcctEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+async function btpAcctLoad() {
+  try {
+    const me = await btFetch('/account', 'GET');
+    btpAcctData = me;
+    document.getElementById('btpAcctLogin').textContent = me.login;
+    document.getElementById('btpAcctEmail').textContent = me.email;
+
+    if (!me.can_manage) {
+      document.getElementById('btpAcctAdmin').style.display = 'none';
+      return;
+    }
+    document.getElementById('btpAcctAdmin').style.display = 'block';
+    document.getElementById('btpAcctList').innerHTML =
+      '<p class="btp-acct-note">Loading&hellip;</p>';
+
+    const res = await btFetch('/account/users', 'GET');
+    btpAcctRenderList(res.users, res.legacy_names || []);
+  } catch (e) {
+    btpAcctMsg('Could not load your account. Refresh and try again.', 'err');
+  }
+}
+
+function btpAcctRenderList(users, legacyNames) {
+  const html = users.map(u => {
+    const opts = legacyNames.slice();
+    if (u.legacy && opts.indexOf(u.legacy) === -1) opts.push(u.legacy);
+    const optHtml = ['<option value="">— no old name —</option>'].concat(
+      opts.map(n => '<option value="' + btpAcctEsc(n) + '"' +
+        (n === u.legacy ? ' selected' : '') + '>' + btpAcctEsc(n) + '</option>')
+    ).join('');
+
+    const tag = u.access === 'wpadmin'
+      ? '<span class="btp-acct-tag is-admin">WordPress admin</span>'
+      : (u.access === 'portaladmin'
+          ? '<span class="btp-acct-tag is-admin">Portal admin</span>'
+          : '<span class="btp-acct-tag">Portal user</span>');
+
+    return '' +
+      '<div class="btp-acct-row" data-id="' + u.id + '">' +
+        '<div class="btp-acct-row-top">' +
+          '<span class="btp-acct-login">' + btpAcctEsc(u.login) + '</span>' + tag +
+          (u.is_self ? '<span class="btp-acct-tag">you</span>' : '') +
+          '<span class="btp-acct-last">' +
+            (u.last ? 'Last login ' + btpAcctEsc(u.last) : 'Never signed in') +
+          '</span>' +
+        '</div>' +
+        '<div class="btp-acct-grid">' +
+          '<div><label>Name</label>' +
+            '<input type="text" data-f="name" value="' + btpAcctEsc(u.name) + '"></div>' +
+          '<div><label>Email</label>' +
+            '<input type="email" data-f="email" value="' + btpAcctEsc(u.email) + '"></div>' +
+          '<div><label>Old name</label><select data-f="legacy">' + optHtml + '</select></div>' +
+        '</div>' +
+        '<div class="btp-acct-actions">' +
+          '<button type="button" class="btp-acct-mini" onclick="btpAcctSave(' + u.id + ',this)">SAVE</button>' +
+          '<button type="button" class="btp-acct-mini ghost" onclick="btpAcctResetUser(' + u.id + ',this)">SEND RESET LINK</button>' +
+        '</div>' +
+      '</div>';
+  }).join('');
+
+  document.getElementById('btpAcctList').innerHTML = html ||
+    '<p class="btp-acct-note">Nobody has portal access yet.</p>';
+}
+
+function btpAcctRowValues(id) {
+  const row = document.querySelector('#btpAcctList .btp-acct-row[data-id="' + id + '"]');
+  if (!row) return null;
+  return {
+    name:   row.querySelector('[data-f="name"]').value.trim(),
+    email:  row.querySelector('[data-f="email"]').value.trim(),
+    legacy: row.querySelector('[data-f="legacy"]').value
+  };
+}
+
+async function btpAcctSave(id, btn) {
+  const vals = btpAcctRowValues(id);
+  if (!vals) return;
+  btn.disabled = true;
+  try {
+    const saved = await btFetch('/account/users/' + id, 'POST', vals);
+    btpAcctMsg(saved.login + ' saved — the portal will show them as "' + saved.shown + '".', 'ok');
+    // Renaming yourself should be visible without hunting for a refresh.
+    if (saved.is_self) setTimeout(() => location.reload(), 900);
+  } catch (e) {
+    btpAcctMsg('Could not save that. Check the email address is valid and not already in use.', 'err');
+  }
+  btn.disabled = false;
+}
+
+async function btpAcctResetUser(id, btn) {
+  btn.disabled = true;
+  try {
+    const res = await btFetch('/account/users/' + id + '/reset', 'POST', {});
+    btpAcctMsg('Password link sent to ' + res.email + '. Good for 24 hours.', 'ok');
+  } catch (e) {
+    btpAcctMsg('Could not send that email. Try again shortly.', 'err');
+  }
+  btn.disabled = false;
+}
+
+async function btpAcctResetSelf() {
+  const btn = document.getElementById('btpAcctResetBtn');
+  btn.disabled = true;
+  try {
+    const res = await btFetch('/account/reset', 'POST', {});
+    btpAcctMsg('Sent to ' + res.email + '. Open it and pick a new password — good for 24 hours.', 'ok');
+  } catch (e) {
+    btpAcctMsg('Could not send that email. Try again shortly.', 'err');
+  }
+  btn.disabled = false;
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('btpAcctPanel') &&
+      document.getElementById('btpAcctPanel').style.display === 'flex') btpAcctClose();
+});
 
 /* ── USER ──
    btUserName is set from the signed-in WordPress account at render time; there
