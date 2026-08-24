@@ -126,7 +126,7 @@ function btp_redirect_capability() {
 /** True if the current visitor may use the tool. */
 function btp_redirect_can() {
     $cap = btp_redirect_capability();
-    if ($cap === 'portal') return true;
+    if ($cap === 'portal') return btp_user_can_access();
     return current_user_can($cap);
 }
 

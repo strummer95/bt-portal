@@ -3,17 +3,18 @@
 Plugin Name: BT Portal
 Plugin URI: https://boomerts.com
 Description: Boomer T's employee portal — schedule board, online stores, quote, redirect, contacts, exchange tracking, OMG scanner, Chipply scanner, day notes/capacity, backups, and the [bt_schedule] shortcode.
-Version: 0.20.3
+Version: 0.21.0
 Author: Duck and Rabbit Co.
 */
 
 if (!defined('ABSPATH')) exit;
 
-define('BTP_VERSION', '0.20.3');
+define('BTP_VERSION', '0.21.0');
 define('BTP_DIR', plugin_dir_path(__FILE__));
 define('BTP_URL', plugin_dir_url(__FILE__));
 define('BTP_FILE', __FILE__);
 
+require_once BTP_DIR . 'includes/users.php';    // portal logins, login gate, identity
 require_once BTP_DIR . 'includes/db.php';        // tables, migrations, nightly CSV + DB backup crons (Snippet 1)
 require_once BTP_DIR . 'includes/rest.php';      // all boomerts/v1 portal endpoints (Snippet 2)
 require_once BTP_DIR . 'includes/shortcode.php'; // [bt_schedule] frontend app (Snippet 3)

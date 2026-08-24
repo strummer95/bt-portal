@@ -8,6 +8,13 @@
 if (!defined('ABSPATH')) exit;
 
 add_shortcode( 'bt_schedule', function() {
+    // ── LOGIN GATE ──
+    // Nothing below runs for a visitor who isn't signed in with portal access.
+    // Replaces the page password that used to guard /employees/.
+    if ( ! btp_user_can_access() ) {
+        return btp_login_form_html();
+    }
+
 // --- Self-healing: ensure created_by column exists ---
     global $wpdb;
     $bt_jobs_tbl = $wpdb->prefix . 'bt_jobs';
@@ -72,6 +79,14 @@ add_shortcode( 'bt_schedule', function() {
 }
 #bt-schedule-app .bt-header-row-top .header-actions { margin-left:auto; border-left:1px solid rgba(255,255,255,.1) !important; padding-left:16px; }
 #bt-schedule-app .bt-header-user { display:flex; align-items:center; padding:8px 16px; flex-shrink:0; }
+#bt-schedule-app .btp-whoami { display:flex; align-items:center; gap:5px; color:rgba(255,255,255,.85);
+  font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; background:#1a1f5e; border:1px solid rgba(255,255,255,.25);
+  border-radius:5px; padding:4px 8px; white-space:nowrap; }
+#bt-schedule-app .btp-signout { display:flex; align-items:center; gap:4px; margin-left:6px;
+  color:rgba(255,255,255,.45); font-family:'Barlow Condensed',sans-serif; font-size:10px;
+  font-weight:700; letter-spacing:.06em; text-decoration:none; transition:color .15s; }
+#bt-schedule-app .btp-signout:hover { color:var(--pink-light); }
 #bt-schedule-app .header-logo {
   background:var(--navy); padding:10px 20px; display:flex;
   align-items:center; border-right:3px solid var(--pink); flex-shrink:0;
@@ -328,7 +343,9 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .tab { font-size: clamp(11px, 0.85vw, 15px); padding: 6px clamp(7px, 0.9vw, 20px); white-space: nowrap; }
 #bt-schedule-app .filter-toggle-btn { padding: clamp(4px, 0.4vw, 6px) clamp(7px, 0.7vw, 12px); font-size: clamp(10px, 0.75vw, 12px); }
 #bt-schedule-app .btn-add { font-size: clamp(11px, 0.8vw, 13px); padding: 7px clamp(9px, 1vw, 18px); }
-#btUserSelect { max-width: clamp(90px, 7vw, 160px); font-size: clamp(10px, 0.7vw, 12px) !important; }
+#bt-schedule-app .btp-whoami { max-width: clamp(90px, 7vw, 160px); overflow:hidden; text-overflow:ellipsis;
+  font-size: clamp(10px, 0.7vw, 12px); }
+#bt-schedule-app .btp-signout { font-size: clamp(9px, 0.6vw, 11px); }
 
 /* ── INLINE TOOLS-CENTER (auto-margins so it shifts smoothly with available space) ── */
 @media (max-width: 2400px) {
@@ -910,16 +927,14 @@ add_shortcode( 'bt_schedule', function() {
       <h1>EMPLOYEE <span>PORTAL</span></h1>
     </div>
     <div class="bt-header-user">
-      <select id="btUserSelect" onchange="btSetUser(this.value)" style="background:#1a1f5e;border:1px solid rgba(255,255,255,.25);border-radius:5px;color:rgba(255,255,255,.85);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;cursor:pointer;outline:none;">
-        <option value="">— Who are you? —</option>
-        <option value="Boomer">Boomer</option>
-        <option value="Dillon">Dillon</option>
-        <option value="Alissa">Alissa</option>
-        <option value="Brock">Brock</option>
-        <option value="Maria">Maria</option>
-        <option value="Brenda">Brenda</option>
-        <option value="Julie">Julie</option>
-      </select>
+      <span class="btp-whoami" title="Signed in">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <?php echo esc_html( btp_actor_name() ); ?>
+      </span>
+      <a class="btp-signout" href="<?php echo esc_url( wp_logout_url( btp_current_url() ) ); ?>" title="Log out">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        LOG OUT
+      </a>
     </div>
     <div class="bt-tools-center">
       <span class="saving-indicator" id="btSavingIndicator"></span>
@@ -1411,7 +1426,7 @@ function btTabFromUrl() {
 
 let btJobs = [], btStores = [], btStoreCategories = [];
 let btCollapsedCats = new Set();
-let btUserName = '';  // Set from dropdown
+let btUserName = <?php echo wp_json_encode( btp_actor_name() ); ?>;  // signed-in user (btp_legacy_name, else display_name)
 let btDayNotes = {}; // dateStr -> note text
 let btOverflowCols = new Set(); // columns with jobs below the fold
 let btClosedDays = {}; // dateStr -> reason string
@@ -3322,11 +3337,11 @@ function btDownloadArtFiles() {
   window.location.href = 'https://www.boomerts.com/wp-content/uploads/2026/03/btart-open.zip';
 }
 
-/* ── USER SELECT ── */
-function btSetUser(name) {
-  btUserName = name;
-  try { localStorage.setItem('btUserName', name); } catch(e) {}
-}
+/* ── USER ──
+   btUserName is set from the signed-in WordPress account at render time; there
+   is no picker and nothing cached in localStorage. btSetUser is kept as a no-op
+   so any stale inline handler left in a cached page can't throw. */
+function btSetUser() { /* identity comes from the session now */ }
 
 /* ── BACKUPS ── */
 function btOpenBackupPanel() {
@@ -3827,14 +3842,9 @@ async function btSaveExchange(orderId, patch) {
   const startTab = (BT_ROUTE.initial && BT_ROUTE.initial !== 'schedule') ? BT_ROUTE.initial : btTabFromUrl();
   if (startTab && startTab !== 'schedule') btSwitchTab(startTab, false);
 
-  try {
-    const savedUser = localStorage.getItem('btUserName');
-    if (savedUser) {
-      btUserName = savedUser;
-      const sel = document.getElementById('btUserSelect');
-      if (sel) sel.value = savedUser;
-    }
-  } catch(e) {}
+  // The old localStorage name picker is retired — clear the leftover key so a
+  // stale browser can't reintroduce a name that isn't the signed-in account.
+  try { localStorage.removeItem('btUserName'); } catch(e) {}
   try {
     const savedCollapsed = localStorage.getItem('btCollapsedCats');
     if (savedCollapsed) btCollapsedCats = new Set(JSON.parse(savedCollapsed));
