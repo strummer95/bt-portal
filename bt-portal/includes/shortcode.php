@@ -4469,6 +4469,15 @@ async function btSaveExchange(orderId, patch) {
     if (!go) { btRenderExchanges(); return; }
   }
 
+  /* Ready for Pickup emails immediately too, and it tells the customer to
+     drive to Oswego. Worth the same one question as Shipped. */
+  if (patch.status === 'ready_pickup' && row.status !== 'ready_pickup') {
+    const go = confirm('Mark this exchange READY FOR PICKUP?\n\n' +
+      'This emails ' + (row.customer || 'the customer') + ' that it is finished and waiting at the shop.\n' +
+      'Make sure it is actually bagged and on the pickup shelf.');
+    if (!go) { btRenderExchanges(); return; }
+  }
+
   btSaving(true);
   try {
     const saved = await btFetch('/exchanges/' + orderId, 'POST', Object.assign({
@@ -4483,6 +4492,8 @@ async function btSaveExchange(orderId, patch) {
       btToast(row.tracking
         ? 'Emailed the customer that it shipped, with tracking <strong>' + btEscHtml(row.tracking) + '</strong>.'
         : 'Emailed the customer that it shipped. Add a tracking number and they\'ll get it automatically.', 'good');
+    } else if (saved.emailed === 'ready_pickup') {
+      btToast('Emailed the customer that it\'s <strong>ready to pick up</strong> at the shop.', 'good');
     }
   } catch(e) {
     alert('Could not save the exchange. ' + (String(e.message||'').indexOf('403') !== -1 ? 'Reload the page and try again.' : ''));

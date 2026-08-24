@@ -763,6 +763,12 @@ function btp_update_exchange( $request ) {
                 if ( ! $hidden && ! in_array( $woo_now, $locked, true ) ) {
                     $woo_to = btp_exchange_woo_status_for( $status );
                     if ( $woo_to !== '' && $woo_to !== $woo_now ) {
+                        /* Our own email says whether it shipped or is ready to
+                           collect; Woo's stock completed notice says neither.
+                           Hold that one back so only the useful one goes out. */
+                        if ( $woo_to === 'completed' && ! $hidden ) {
+                            btp_exchange_suppress_woo_completed( $order );
+                        }
                         $order->update_status( $woo_to, 'Exchange ' . $labels[$status] . ' in the BT Portal. ' );
                     }
                 }

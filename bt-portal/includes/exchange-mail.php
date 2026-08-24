@@ -216,3 +216,40 @@ function btp_exchange_send_status_email( $order, $kind, $tracking ) {
     ) );
     return true;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   WOOCOMMERCE'S OWN "ORDER COMPLETE" EMAIL
+
+   Marking an exchange Shipped or Ready for Pickup completes the Woo order,
+   and Woo then sends its stock "your order is complete" notice. For a normal
+   order that is right. For an exchange it is actively unhelpful: it arrives
+   alongside our own email and says nothing about whether the replacement is
+   in the post or sitting on the counter, so the customer gets two messages
+   and the vaguer one often lands first.
+
+   So when the portal is the thing completing an exchange, Woo's version is
+   held back and ours is the only one that goes out. The suppression is
+   stamped on the order with a timestamp and only holds for five minutes, so
+   a genuine completed-order email months later still sends normally.
+   ───────────────────────────────────────────────────────────────────── */
+
+function btp_exchange_suppress_woo_completed( $order ) {
+    if ( ! $order ) return;
+    $order->update_meta_data( '_btp_ex_suppress_completed', time() );
+    $order->save();
+}
+
+function btp_exchange_filter_completed_recipient( $recipient, $order ) {
+    if ( ! $order || ! is_a( $order, 'WC_Order' ) ) return $recipient;
+
+    $stamp = (int) $order->get_meta('_btp_ex_suppress_completed');
+    if ( $stamp && ( time() - $stamp ) < 300 ) {
+        $order->add_order_note(
+            'WooCommerce order-complete email held back — the portal sent the exchange '
+          . 'notice instead, which tells the customer whether it shipped or is ready to collect.'
+        );
+        return '';
+    }
+    return $recipient;
+}
+add_filter( 'woocommerce_email_recipient_customer_completed_order', 'btp_exchange_filter_completed_recipient', 10, 2 );
