@@ -136,6 +136,10 @@ add_shortcode( 'bt_schedule', function() {
   font-size:12px; line-height:1; }
 #bt-schedule-app .btv-caret:hover { color:#1a1f5e; }
 #bt-schedule-app .btv-acts { display:flex; gap:4px; justify-content:flex-end; white-space:nowrap; }
+#bt-schedule-app .btv-notecell { max-width:260px; }
+#bt-schedule-app .btv-note1 { display:block; max-width:260px; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; font-size:12px; color:#5a6380; }
+#bt-schedule-app .btv-table tbody tr.btv-open .btv-note1 { white-space:normal; overflow:visible; }
 #bt-schedule-app .btv-form { margin-bottom:14px; border:2px solid #1a1f5e; border-radius:8px; padding:16px;
   background:#fff; }
 #bt-schedule-app .btv-form .btv-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
@@ -3603,7 +3607,7 @@ function btvRender() {
       '<thead><tr>' +
         '<th style="width:22px;"></th>' +
         '<th>Vendor</th><th>Phone</th><th>Account&nbsp;#</th>' +
-        '<th>Login</th><th>Password</th><th>Website</th>' +
+        '<th>Login</th><th>Password</th><th>Website</th><th>Notes</th>' +
         (btvCanEdit ? '<th style="text-align:right;">Edit</th>' : '') +
       '</tr></thead><tbody>' +
       list.map(btvRowHtml).join('') +
@@ -3613,8 +3617,19 @@ function btvRender() {
 }
 
 function btvRowHtml(v) {
-  const cols  = btvCanEdit ? 8 : 7;
-  const extra = (v.address || v.notes || v.fax);
+  const cols = btvCanEdit ? 9 : 8;
+
+  /* Show what fits on one line and only offer the caret when something is
+     actually being withheld — a second line of notes, an address, or a fax.
+     A caret on every row would be a click that reveals nothing. */
+  const noteLines = String(v.notes || '').split('\n').filter(l => l.trim());
+  const firstNote = noteLines.length ? noteLines[0].trim() : '';
+  const noteHidden = noteLines.length > 1 || firstNote.length > 46;
+  const extra = noteHidden || v.address || v.fax;
+
+  const noteCell = firstNote
+    ? '<span class="btv-note1" title="' + btvEsc(v.notes) + '">' + btvEsc(firstNote) + '</span>'
+    : '<span style="color:#c9cde0;">—</span>';
 
   const tel  = v.phone
     ? '<a href="tel:' + btvEsc(v.phone.replace(/[^0-9+*]/g,'')) + '">' + btvEsc(v.phone) + '</a>' : '—';
@@ -3650,6 +3665,7 @@ function btvRowHtml(v) {
       '<td>' + (btvEsc(v.login) || '—') + '</td>' +
       '<td>' + secret + '</td>' +
       '<td>' + site + '</td>' +
+      '<td class="btv-notecell">' + noteCell + '</td>' +
       acts +
     '</tr>';
 
@@ -3658,7 +3674,7 @@ function btvRowHtml(v) {
         '<td colspan="' + cols + '"><div class="btv-detail-in">' +
           (v.address ? '<div><h4>Address</h4><p>' + btvEsc(v.address) + '</p></div>' : '') +
           (v.fax ? '<div><h4>Fax</h4><p>' + btvEsc(v.fax) + '</p></div>' : '') +
-          (v.notes ? '<div><h4>Notes</h4><p>' + btvEsc(v.notes) + '</p></div>' : '') +
+          (noteHidden ? '<div><h4>Notes</h4><p>' + btvEsc(v.notes) + '</p></div>' : '') +
         '</div></td>' +
       '</tr>'
     : '';
