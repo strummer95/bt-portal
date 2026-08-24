@@ -48,6 +48,7 @@ function btp_tab_slugs() {
         'omgscan'   => 'omg-scanner',
         // 'barcoder'  => 'chipply-barcoder',  // hidden
         'chipscan'  => 'chipply-scanner',
+        'vendors'   => 'vendors',
     );
 }
 

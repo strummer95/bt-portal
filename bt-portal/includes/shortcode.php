@@ -90,6 +90,270 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .btp-whoami { cursor:pointer; }
 #bt-schedule-app .btp-whoami:hover { border-color:var(--pink-light); color:#fff; }
 
+/* ── VENDORS ── */
+#bt-schedule-app .btv-top { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+#bt-schedule-app .btv-h2 { margin:0; font-family:'Oswald',sans-serif; font-size:1.3em; color:#0f1240;
+  letter-spacing:.04em; text-transform:uppercase; }
+#bt-schedule-app #btvSearch { flex:1; min-width:200px; max-width:360px; padding:8px 11px; font-size:14px;
+  font-family:'Barlow',sans-serif; border:1px solid #e8eaf0; border-radius:5px; background:#fff; outline:none; }
+#bt-schedule-app #btvSearch:focus { border-color:#1a1f5e; }
+#bt-schedule-app #btvCat { padding:8px 10px; font-size:13px; font-family:'Barlow',sans-serif;
+  border:1px solid #e8eaf0; border-radius:5px; background:#fff; outline:none; }
+#bt-schedule-app #btvCount { font-size:12px; color:#9ca3b8; font-family:'Barlow Condensed',sans-serif;
+  letter-spacing:.05em; }
+#bt-schedule-app .btv-add { margin-left:auto; padding:8px 14px; border:none; border-radius:5px;
+  background:#e91e8c; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:12px;
+  font-weight:700; letter-spacing:.07em; cursor:pointer; }
+#bt-schedule-app .btv-add:hover { background:#ff47a8; }
+#bt-schedule-app .btv-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:12px; }
+#bt-schedule-app .btv-card { border:1px solid #e8eaf0; border-radius:8px; background:#fff; padding:14px 15px; }
+#bt-schedule-app .btv-card h3 { margin:0 0 2px; font-family:'Oswald',sans-serif; font-size:15px;
+  font-weight:600; color:#0f1240; letter-spacing:.02em; }
+#bt-schedule-app .btv-cat { display:inline-block; font-family:'Barlow Condensed',sans-serif; font-size:10px;
+  font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#5a6380; background:#f4f5f9;
+  border-radius:20px; padding:2px 8px; margin-bottom:9px; }
+#bt-schedule-app .btv-kv { display:grid; grid-template-columns:74px 1fr; gap:3px 8px; font-size:13px;
+  line-height:1.45; }
+#bt-schedule-app .btv-k { font-family:'Barlow Condensed',sans-serif; font-size:10px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; color:#9ca3b8; padding-top:3px; }
+#bt-schedule-app .btv-v { color:#0f1240; word-break:break-word; }
+#bt-schedule-app .btv-v a { color:#1a1f5e; }
+#bt-schedule-app .btv-note { margin-top:9px; padding-top:9px; border-top:1px solid #f4f5f9; font-size:12px;
+  color:#5a6380; white-space:pre-line; line-height:1.5; }
+#bt-schedule-app .btv-secret { display:flex; align-items:center; gap:6px; }
+#bt-schedule-app .btv-dots { font-family:monospace; letter-spacing:2px; color:#9ca3b8; }
+#bt-schedule-app .btv-mini { font-family:'Barlow Condensed',sans-serif; font-size:10px; font-weight:700;
+  letter-spacing:.05em; padding:3px 8px; border-radius:3px; border:1px solid #e8eaf0; background:#fff;
+  color:#5a6380; cursor:pointer; }
+#bt-schedule-app .btv-mini:hover { border-color:#1a1f5e; color:#1a1f5e; }
+#bt-schedule-app .btv-ops { display:flex; gap:6px; margin-top:11px; padding-top:10px;
+  border-top:1px solid #f4f5f9; }
+#bt-schedule-app .btv-empty { color:#9ca3b8; font-size:14px; padding:30px 0; text-align:center;
+  grid-column:1/-1; }
+#bt-schedule-app .btv-form { grid-column:1/-1; border:2px solid #1a1f5e; border-radius:8px; padding:16px;
+  background:#fff; }
+#bt-schedule-app .btv-form .btv-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:10px; }
+#bt-schedule-app .btv-form label { display:block; font-family:'Barlow Condensed',sans-serif; font-size:10px;
+  font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#9ca3b8; margin-bottom:3px; }
+#bt-schedule-app .btv-form input, #bt-schedule-app .btv-form select, #bt-schedule-app .btv-form textarea {
+  width:100%; box-sizing:border-box; padding:7px 9px; font-size:13px; font-family:'Barlow',sans-serif;
+  border:1px solid #e8eaf0; border-radius:4px; background:#fff; outline:none; }
+#bt-schedule-app .btv-form textarea { min-height:64px; resize:vertical; }
+#bt-schedule-app .btv-msg { padding:9px 12px; border-radius:4px; font-size:13px; margin-bottom:12px; }
+#bt-schedule-app .btv-msg.ok { background:#eaf7ee; border-left:3px solid #2e7d32; color:#1b5e20; }
+#bt-schedule-app .btv-msg.err { background:#fdecea; border-left:3px solid #c0392b; color:#7d2018; }
+
+/* ── VENDORS (Other > Vendors) ──
+   The old shared spreadsheet. Passwords are encrypted server side and never
+   ride along in the list payload — a reveal is its own POST, and every reveal
+   is written to an audit row. */
+
+let btvData = [], btvCats = [], btvCanEdit = false, btvLoaded = false, btvEditing = null;
+
+async function btvLoad(force) {
+  if (btvLoaded && !force) return;
+  try {
+    const res = await btFetch('/vendors', 'GET');
+    btvData    = res.vendors || [];
+    btvCats    = res.categories || [];
+    btvCanEdit = !!res.can_edit;
+    btvLoaded  = true;
+
+    const sel = document.getElementById('btvCat');
+    if (sel && sel.options.length <= 1) {
+      btvCats.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        sel.appendChild(o);
+      });
+    }
+    const add = document.getElementById('btvAddBtn');
+    if (add) add.style.display = btvCanEdit ? '' : 'none';
+    btvRender();
+  } catch (e) {
+    document.getElementById('btvList').innerHTML =
+      '<p class="btv-empty">Could not load the vendor list. Refresh to try again.</p>';
+  }
+}
+
+function btvEsc(v) {
+  return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function btvMsg(text, kind) {
+  const el = document.getElementById('btvMsg');
+  el.innerHTML = text ? '<div class="btv-msg ' + (kind||'ok') + '">' + btvEsc(text) + '</div>' : '';
+  if (text) setTimeout(() => { el.innerHTML = ''; }, 6000);
+}
+
+function btvRender() {
+  const q   = (document.getElementById('btvSearch').value || '').toLowerCase().trim();
+  const cat = document.getElementById('btvCat').value;
+
+  const list = btvData.filter(v => {
+    if (cat && v.category !== cat) return false;
+    if (!q) return true;
+    return [v.name, v.account_no, v.phone, v.fax, v.login, v.notes, v.address, v.website]
+      .join(' ').toLowerCase().includes(q);
+  });
+
+  document.getElementById('btvCount').textContent =
+    list.length + (list.length === 1 ? ' vendor' : ' vendors');
+
+  const html = list.map(btvCard).join('');
+  document.getElementById('btvList').innerHTML =
+    (btvEditing !== null ? btvFormHtml(btvEditing) : '') +
+    (html || '<p class="btv-empty">Nothing matches that.</p>');
+}
+
+function btvRow(k, v) {
+  if (!v) return '';
+  return '<div class="btv-k">' + k + '</div><div class="btv-v">' + v + '</div>';
+}
+
+function btvCard(v) {
+  const tel  = v.phone ? '<a href="tel:' + btvEsc(v.phone.replace(/[^0-9+*]/g,'')) + '">' + btvEsc(v.phone) + '</a>' : '';
+  const site = v.website ? '<a href="' + btvEsc(v.website) + '" target="_blank" rel="noopener">' +
+               btvEsc(v.website.replace(/^https?:\/\//,'').replace(/\/$/,'')) + '</a>' : '';
+
+  const secret = v.has_secret
+    ? '<div class="btv-secret" id="btvSec' + v.id + '">' +
+        '<span class="btv-dots">••••••••</span>' +
+        '<button type="button" class="btv-mini" onclick="btvReveal(' + v.id + ')">SHOW</button>' +
+      '</div>'
+    : '';
+
+  return '' +
+    '<div class="btv-card">' +
+      '<h3>' + btvEsc(v.name) + '</h3>' +
+      (v.category ? '<span class="btv-cat">' + btvEsc(v.category) + '</span>' : '') +
+      '<div class="btv-kv">' +
+        btvRow('Phone', tel) +
+        btvRow('Fax', btvEsc(v.fax)) +
+        btvRow('Account', btvEsc(v.account_no)) +
+        btvRow('Login', btvEsc(v.login)) +
+        btvRow('Password', secret) +
+        btvRow('Website', site) +
+        btvRow('Address', btvEsc(v.address).replace(/\n/g,'<br>')) +
+      '</div>' +
+      (v.notes ? '<div class="btv-note">' + btvEsc(v.notes) + '</div>' : '') +
+      (btvCanEdit ?
+        '<div class="btv-ops">' +
+          '<button type="button" class="btv-mini" onclick="btvEdit(' + v.id + ')">EDIT</button>' +
+          '<button type="button" class="btv-mini" onclick="btvDelete(' + v.id + ',\'' + btvEsc(v.name) + '\')">DELETE</button>' +
+        '</div>' : '') +
+    '</div>';
+}
+
+async function btvReveal(id) {
+  const box = document.getElementById('btvSec' + id);
+  try {
+    const res = await btFetch('/vendors/' + id + '/secret', 'POST', {});
+    box.innerHTML =
+      '<code style="font-size:13px;color:#0f1240;word-break:break-all;">' + btvEsc(res.secret) + '</code>' +
+      '<button type="button" class="btv-mini" onclick="btvCopy(' + id + ',\'' +
+        btvEsc(res.secret).replace(/'/g,"\\'") + '\')">COPY</button>';
+    // Don't leave it sitting on screen for the next person at that machine.
+    setTimeout(() => {
+      const b = document.getElementById('btvSec' + id);
+      if (b) b.innerHTML = '<span class="btv-dots">••••••••</span>' +
+        '<button type="button" class="btv-mini" onclick="btvReveal(' + id + ')">SHOW</button>';
+    }, 30000);
+  } catch (e) {
+    btvMsg('Could not read that password.', 'err');
+  }
+}
+
+function btvCopy(id, text) {
+  const done = () => btvMsg('Password copied.', 'ok');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {});
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+}
+
+function btvNew()  { btvEditing = {id:0, category:'Apparel'}; btvRender(); }
+function btvEdit(id) {
+  const v = btvData.find(x => x.id === id);
+  if (v) { btvEditing = Object.assign({}, v); btvRender(); }
+}
+function btvCancel() { btvEditing = null; btvRender(); }
+
+function btvFormHtml(v) {
+  const catOpts = btvCats.map(c =>
+    '<option value="' + btvEsc(c) + '"' + (c === v.category ? ' selected' : '') + '>' + btvEsc(c) + '</option>').join('');
+
+  return '' +
+    '<div class="btv-form">' +
+      '<div class="btv-grid">' +
+        '<div><label>Vendor name</label><input id="btvfName" value="' + btvEsc(v.name) + '"></div>' +
+        '<div><label>Category</label><select id="btvfCat">' + catOpts + '</select></div>' +
+        '<div><label>Phone</label><input id="btvfPhone" value="' + btvEsc(v.phone) + '"></div>' +
+        '<div><label>Fax</label><input id="btvfFax" value="' + btvEsc(v.fax) + '"></div>' +
+        '<div><label>Account #</label><input id="btvfAcct" value="' + btvEsc(v.account_no) + '"></div>' +
+        '<div><label>Login</label><input id="btvfLogin" value="' + btvEsc(v.login) + '"></div>' +
+        '<div><label>Password' + (v.has_secret ? ' (blank = leave as is)' : '') + '</label>' +
+          '<input id="btvfSecret" type="text" placeholder="' + (v.has_secret ? 'unchanged' : '') + '"></div>' +
+        '<div><label>Website</label><input id="btvfSite" value="' + btvEsc(v.website) + '"></div>' +
+      '</div>' +
+      '<div class="btv-grid" style="margin-top:10px;">' +
+        '<div><label>Address</label><textarea id="btvfAddr">' + btvEsc(v.address) + '</textarea></div>' +
+        '<div><label>Notes / rep</label><textarea id="btvfNotes">' + btvEsc(v.notes) + '</textarea></div>' +
+      '</div>' +
+      '<div class="btv-ops">' +
+        '<button type="button" class="btv-mini" style="background:#1a1f5e;color:#fff;border-color:#1a1f5e;" ' +
+          'onclick="btvSave(' + (v.id || 0) + ')">SAVE</button>' +
+        '<button type="button" class="btv-mini" onclick="btvCancel()">CANCEL</button>' +
+      '</div>' +
+    '</div>';
+}
+
+async function btvSave(id) {
+  const body = {
+    name:       document.getElementById('btvfName').value.trim(),
+    category:   document.getElementById('btvfCat').value,
+    phone:      document.getElementById('btvfPhone').value.trim(),
+    fax:        document.getElementById('btvfFax').value.trim(),
+    account_no: document.getElementById('btvfAcct').value.trim(),
+    login:      document.getElementById('btvfLogin').value.trim(),
+    website:    document.getElementById('btvfSite').value.trim(),
+    address:    document.getElementById('btvfAddr').value.trim(),
+    notes:      document.getElementById('btvfNotes').value.trim()
+  };
+  const pw = document.getElementById('btvfSecret').value;
+  // Only send the password when something was typed, so an edit of the phone
+  // number can't silently wipe a password nobody retyped.
+  if (pw !== '') body.secret = pw;
+
+  if (!body.name) { btvMsg('A vendor name is needed.', 'err'); return; }
+
+  try {
+    await btFetch(id ? '/vendors/' + id : '/vendors', 'POST', body);
+    btvEditing = null;
+    await btvLoad(true);
+    btvMsg(body.name + ' saved.', 'ok');
+  } catch (e) {
+    btvMsg('Could not save that vendor.', 'err');
+  }
+}
+
+async function btvDelete(id, name) {
+  if (!confirm('Delete ' + name + ' from the vendor list?')) return;
+  try {
+    await btFetch('/vendors/' + id, 'DELETE', {});
+    await btvLoad(true);
+    btvMsg(name + ' deleted.', 'ok');
+  } catch (e) {
+    btvMsg('Could not delete that vendor.', 'err');
+  }
+}
+
 /* ── ACCOUNT PANEL ── */
 #btpAcctBg { display:none; position:fixed; inset:0; background:rgba(15,18,64,.55); z-index:999998; }
 #btpAcctPanel { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -1094,6 +1358,7 @@ add_shortcode( 'bt_schedule', function() {
           <svg class="caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           <div class="tab-menu" id="btMoreMenu">
             <div class="tab-menu-item" data-tab="contacts" onclick="btSwitchTab('contacts')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts</div>
+            <div class="tab-menu-item" data-tab="vendors" onclick="btSwitchTab('vendors')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 21v-7h6v7"/></svg>Vendors</div>
             <div class="tab-menu-item" data-tab="exchanges" onclick="btSwitchTab('exchanges')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Exchanges</div>
             <div class="tab-menu-item" data-tab="omgscan" onclick="btSwitchTab('omgscan')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 5v14"/><path d="M7 5v14"/><path d="M11 5v14"/><path d="M15 5v14"/><path d="M19 5v14"/></svg>OMG Scanner</div>
             <!-- HIDDEN: Chipply Barcoder. Chipply now stamps its own barcodes; kept for
@@ -1197,6 +1462,20 @@ add_shortcode( 'bt_schedule', function() {
 </div>
 
 <!-- CONTACTS TAB -->
+<div id="bt-tab-vendors" class="tab-content">
+  <div style="padding:24px 28px;">
+    <div class="btv-top">
+      <h2 class="btv-h2">Vendors</h2>
+      <input type="search" id="btvSearch" placeholder="Search name, account #, phone, rep&hellip;" oninput="btvRender()">
+      <select id="btvCat" onchange="btvRender()"><option value="">All categories</option></select>
+      <span id="btvCount"></span>
+      <button type="button" class="btv-add" id="btvAddBtn" onclick="btvNew()" style="display:none;">+ ADD VENDOR</button>
+    </div>
+    <div id="btvMsg"></div>
+    <div id="btvList" class="btv-list"><p class="btv-empty">Loading&hellip;</p></div>
+  </div>
+</div>
+
 <div id="bt-tab-contacts" class="tab-content">
   <div style="padding:24px 28px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
@@ -3807,7 +4086,7 @@ async function btRestoreFromBackup(id, label) {
 /* ── TABS ── */
 /* Tabs that live inside the OTHER dropdown rather than on the bar itself.
    Add a tab here and it needs nothing else in this function. */
-const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', omgscan: 'OMG Scanner', chipscan: 'Chipply Scanner' };  // barcoder: 'Chipply Barcoder' — hidden
+const BT_MORE_TABS = { contacts: 'Contacts', vendors: 'Vendors', exchanges: 'Exchanges', omgscan: 'OMG Scanner', chipscan: 'Chipply Scanner' };  // barcoder: 'Chipply Barcoder' — hidden
 
 function btToggleMore(e) {
   // Clicks on the menu items bubble up to this handler; ignore them so the
@@ -3853,6 +4132,7 @@ function btSwitchTab(tab, push) {
 
   if (isStores) btLoadAndRenderStores();
   if (tab === 'contacts') btLoadContacts();
+  if (tab === 'vendors')  btvLoad();
 
   // The exchange poll is tied to the tab, not the page.
   if (tab === 'exchanges') { btLoadExchanges(); btStartExPoll(); }
