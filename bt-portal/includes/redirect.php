@@ -271,8 +271,8 @@ function btp_redirect_get_all() {
         'meta_query'     => array(
             array('key' => '_bt_chipply_url', 'compare' => 'EXISTS'),
         ),
-        'orderby'        => 'date',
-        'order'          => 'DESC',
+        'orderby'        => 'title',
+        'order'          => 'ASC',
         'no_found_rows'  => true,
     ));
 
@@ -341,6 +341,8 @@ function btp_redirect_tab_shortcode() {
     #bt-schedule-app #btrp-panel .btrp-msg { margin-top: 14px !important; padding: 11px 14px !important; border-radius: 6px !important; font-size: 14px !important; display: none; }
     #bt-schedule-app #btrp-panel .btrp-msg.ok { background: #e6f7ed !important; color: #146c43 !important; border: 1.5px solid #b8e3c8 !important; display: block; }
     #bt-schedule-app #btrp-panel .btrp-msg.err { background: #fdecec !important; color: #a52929 !important; border: 1.5px solid #f5c5c5 !important; display: block; }
+    #bt-schedule-app #btrp-panel .btrp-search { flex: 0 1 300px !important; margin-left: 18px !important; padding: 7px 11px !important; font-family: 'Barlow', sans-serif !important; font-size: 13px !important; font-weight: 400 !important; letter-spacing: 0 !important; text-transform: none !important; color: #0f1240 !important; background: #fff !important; border: 1px solid #d8dce8 !important; border-radius: 5px !important; outline: none !important; }
+    #bt-schedule-app #btrp-panel .btrp-search:focus { border-color: #1a1f5e !important; }
     #bt-schedule-app #btrp-panel .btrp-table-wrap { overflow-x: auto !important; margin: 0 -4px !important; padding: 0 4px !important; }
     #bt-schedule-app #btrp-panel .btrp-table { width: 100% !important; border-collapse: separate !important; border-spacing: 0 !important; font-size: 14px !important; margin: 0 !important; }
     #bt-schedule-app #btrp-panel .btrp-table thead th { background: #0f1240 !important; color: #fff !important; text-align: left !important; padding: 12px 16px !important; font-family: 'Barlow Condensed', sans-serif !important; font-size: 13px !important; font-weight: 700 !important; letter-spacing: .08em !important; text-transform: uppercase !important; margin: 0 !important; }
@@ -411,6 +413,8 @@ function btp_redirect_tab_shortcode() {
         <div class="btrp-card">
             <div class="btrp-card-title">
                 ACTIVE <span>REDIRECTS</span>
+                <input type="search" id="btrpSearch" class="btrp-search"
+                       placeholder="Search name, path or destination&hellip;" autocomplete="off">
                 <span class="btrp-count"><span id="btrpCount">0</span> total</span>
             </div>
             <div class="btrp-table-wrap">
@@ -444,6 +448,7 @@ function btp_redirect_tab_shortcode() {
 
         var elBody    = document.getElementById('btrpBody');
         var elCount   = document.getElementById('btrpCount');
+        var elSearch  = document.getElementById('btrpSearch');
         var elTitle   = document.getElementById('btrpTitle');
         var elUrl     = document.getElementById('btrpUrl');
         var elCreate  = document.getElementById('btrpCreate');
@@ -519,15 +524,33 @@ function btp_redirect_tab_shortcode() {
             return months[d.getMonth()] + ' ' + d.getDate() + ', ' + hh + ':' + mm + ap;
         }
 
+        function visibleRows() {
+            var q = elSearch ? elSearch.value.toLowerCase().replace(/^\s+|\s+$/g, '') : '';
+            if (!q) { return rows; }
+            var out = [];
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                var hay = (r.title + ' ' + r.slug + ' ' + r.url).toLowerCase();
+                if (hay.indexOf(q) !== -1) { out.push(r); }
+            }
+            return out;
+        }
+
         function render() {
-            elCount.textContent = rows.length;
+            var list = visibleRows();
+            elCount.textContent = list.length;
+
             if (rows.length === 0) {
                 elBody.innerHTML = '<tr><td colspan="6" class="btrp-empty">No redirects yet. Create one above.</td></tr>';
                 return;
             }
+            if (list.length === 0) {
+                elBody.innerHTML = '<tr><td colspan="6" class="btrp-empty">Nothing matches that search.</td></tr>';
+                return;
+            }
             var html = '';
-            for (var i = 0; i < rows.length; i++) {
-                var r = rows[i];
+            for (var i = 0; i < list.length; i++) {
+                var r = list[i];
                 var clicksCls = r.clicks > 0 ? 'btrp-pill' : 'btrp-pill zero';
                 var pathDisplay = '/stores/' + escHtml(r.slug) + '/';
                 html += '<tr data-id="' + r.id + '">';
@@ -597,6 +620,9 @@ function btp_redirect_tab_shortcode() {
                 }
             });
         });
+
+        if (elSearch) { elSearch.addEventListener('input', render); }
+
 
         elBody.addEventListener('click', function(e){
             var btn = e.target;
