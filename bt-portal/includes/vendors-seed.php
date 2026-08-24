@@ -419,10 +419,6 @@ function btp_vendor_seed_2() {
             'login'=>'dillon@boomerts.com','secret'=>'Digital$0123'),
 
         // ── INFRASTRUCTURE ────────────────────────────────────────────────
-        array('name'=>'AWS','category'=>'Internal',
-            'account_no'=>'879381286523','login'=>'dillon','secret'=>'Boomer$012',
-            'notes'=>'Runs the website. Losing this account takes boomerts.com with it.'),
-
         array('name'=>'New BT Server (Synology)','category'=>'Internal',
             'login'=>'Ryan','secret'=>'Digital$0203',
             'website'=>'https://boomers.synology.me:5001',
@@ -442,4 +438,28 @@ function btp_vendor_seed_2() {
             'notes'=>'Windows login on the production machines.'),
 
     ) );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   REMOVALS
+
+   Batch 2 briefly included the AWS root account. It does not belong in a list
+   every portal user can read — that one login controls the server, the site
+   and every @boomerts.com mailbox. Pulling it from the seed is not enough on
+   a site where it already imported, so it is deleted here too.
+   ───────────────────────────────────────────────────────────────────── */
+
+function btp_vendor_remove_batch( $key, $names ) {
+    global $wpdb;
+    if ( get_option( 'btp_vendor_removed_' . $key ) ) return;
+
+    $t = btp_vendor_table();
+    foreach ( $names as $name ) {
+        $wpdb->delete( $t, array( 'name' => $name ) );
+    }
+    update_option( 'btp_vendor_removed_' . $key, 1 );
+}
+
+function btp_vendor_remove_1() {
+    btp_vendor_remove_batch( '1', array( 'AWS' ) );
 }

@@ -84,6 +84,7 @@ function btp_vendor_seed_later() {
     global $wpdb;
     if ( ! get_option('btp_vendor_db_version') ) return;
     if ( function_exists('btp_vendor_seed_2') ) btp_vendor_seed_2();
+    if ( function_exists('btp_vendor_remove_1') ) btp_vendor_remove_1();
 }
 add_action('init', 'btp_vendor_seed_later', 3);
 
