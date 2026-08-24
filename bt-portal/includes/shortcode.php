@@ -15,6 +15,12 @@ add_shortcode( 'bt_schedule', function() {
         return btp_login_form_html();
     }
 
+    // Signed in, but still on a password an admin handed out. Asks once per
+    // sign-in; "keep this one for now" gets them straight through.
+    if ( btp_should_prompt_change() ) {
+        return btp_change_password_html();
+    }
+
 // --- Self-healing: ensure created_by column exists ---
     global $wpdb;
     $bt_jobs_tbl = $wpdb->prefix . 'bt_jobs';
@@ -3919,8 +3925,9 @@ async function btpAcctCreate(btn) {
   btn.disabled = true;
   try {
     const made = await btFetch('/account/users', 'POST', body);
-    btpAcctMsg(made.login + ' created — an invite is on its way to ' + made.email +
-               '. They pick their own password from the link.', 'ok');
+    btpAcctMsg(made.login + ' created. Password:  ' + made.temp +
+               '  — also emailed to ' + made.email + '. ' +
+               'The portal will ask them to pick their own once they sign in.', 'ok');
     btpAcctLoad();
   } catch (e) {
     btpAcctMsg('Could not create that user. The username or email is probably already taken.', 'err');
@@ -3960,7 +3967,9 @@ async function btpAcctResetUser(id, btn) {
   btn.disabled = true;
   try {
     const res = await btFetch('/account/users/' + id + '/reset', 'POST', {});
-    btpAcctMsg('Password link sent to ' + res.email + '. Good for 24 hours.', 'ok');
+    btpAcctMsg('New password for ' + res.login + ' is  ' + res.temp +
+               '  — also emailed to ' + res.email + '. Read it to them; ' +
+               'the portal will ask them to change it.', 'ok');
   } catch (e) {
     btpAcctMsg('Could not send that email. Try again shortly.', 'err');
   }

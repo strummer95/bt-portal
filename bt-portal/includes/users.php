@@ -95,6 +95,70 @@ function btp_current_url() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   TEMPORARY PASSWORDS
+
+   Onboarding by emailed link kept failing in practice — links expire, mail
+   lands in spam, and someone standing at a press can't deal with either. So a
+   new account gets a short readable password that an admin can read out loud
+   or text, and the portal asks them to replace it once they're in.
+
+   It is generated per person rather than being one shared default: a single
+   default that everyone knows, and that is optional to change, is the shared
+   password we just spent the day removing.
+   ───────────────────────────────────────────────────────────────────── */
+
+/**
+ * Short, unambiguous, sayable over the noise of a shop floor. No O/0 or I/1,
+ * no characters that need explaining over the phone.
+ */
+function btp_temp_password() {
+    $letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';   // no I, no O
+    $digits  = '23456789';                    // no 0, no 1
+    $out = '';
+    for ($i = 0; $i < 3; $i++) $out .= $letters[random_int(0, strlen($letters) - 1)];
+    $out .= '-';
+    for ($i = 0; $i < 4; $i++) $out .= $digits[random_int(0, strlen($digits) - 1)];
+    return $out;
+}
+
+/** True while this account is still on the password an admin handed them. */
+function btp_must_change_password($user_id = 0) {
+    $user_id = $user_id ? (int) $user_id : get_current_user_id();
+    return $user_id && get_user_meta($user_id, 'btp_temp_password', true) === '1';
+}
+
+function btp_flag_temp_password($user_id) { update_user_meta($user_id, 'btp_temp_password', '1'); }
+function btp_clear_temp_password($user_id) { delete_user_meta($user_id, 'btp_temp_password'); }
+
+/**
+ * Set a fresh temporary password on an account and mail it out. Returns the
+ * plain text ONCE, so the admin who pressed the button can read it to the
+ * person standing next to them. It is never stored in plain text anywhere.
+ */
+function btp_issue_temp_password($user_id) {
+    $user = get_userdata($user_id);
+    if (!$user) return '';
+
+    $pass = btp_temp_password();
+    wp_set_password($pass, $user_id);
+    btp_flag_temp_password($user_id);
+
+    $name = $user->display_name ? $user->display_name : $user->user_login;
+    $body =
+        "Hi $name,\n\n" .
+        "Here's how to get into the Boomer T's employee portal.\n\n" .
+        "   Web address:  " . btp_portal_base_url() . "\n" .
+        "   Username:     {$user->user_login}\n" .
+        "   Password:     {$pass}\n\n" .
+        "The portal will ask you to pick your own password once you're in. You don't\n" .
+        "have to, but the one above was handed out by someone else, so it's worth doing.\n";
+
+    wp_mail($user->user_email, "Your Boomer T's portal login", $body);
+
+    return $pass;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    INVITE + RESET EMAILS — point at the portal, not wp-login.php
    ───────────────────────────────────────────────────────────────────── */
 
@@ -265,6 +329,100 @@ function btp_is_setpass_request() {
 /* ─────────────────────────────────────────────────────────────────────────
    THE GATE SCREENS
    ───────────────────────────────────────────────────────────────────── */
+
+/**
+ * Shown once the person is signed in but still on a password an admin gave
+ * them. They can skip it — but it asks again next time, so it stays a nudge
+ * rather than a wall.
+ */
+function btp_change_password_html() {
+    $user  = wp_get_current_user();
+    $error = $GLOBALS['btp_change_error'] ?? '';
+    ob_start();
+    ?>
+<div id="btp-login">
+  <form method="post" class="btp-login-card">
+    <div class="btp-login-brand">EMPLOYEE <span>PORTAL</span></div>
+
+    <p class="btp-login-help">You&rsquo;re in, <strong><?php echo esc_html($user->display_name); ?></strong>.
+      You&rsquo;re using a password someone else handed you &mdash; pick your own so it&rsquo;s
+      yours alone.</p>
+
+    <?php if ($error) : ?><div class="btp-login-error"><?php echo esc_html($error); ?></div><?php endif; ?>
+
+    <?php wp_nonce_field('btp_change'); ?>
+
+    <label for="btp_new1">New password</label>
+    <input type="password" name="btp_new1" id="btp_new1" autofocus autocomplete="new-password" minlength="8">
+
+    <label for="btp_new2">Confirm password</label>
+    <input type="password" name="btp_new2" id="btp_new2" autocomplete="new-password" minlength="8">
+
+    <label class="btp-login-remember">
+      <input type="checkbox" onclick="
+        var t = this.checked ? 'text' : 'password';
+        document.getElementById('btp_new1').type = t;
+        document.getElementById('btp_new2').type = t;">
+      Show password
+    </label>
+
+    <button type="submit" name="btp_change_submit" value="1">SAVE MY PASSWORD</button>
+
+    <button type="submit" name="btp_change_skip" value="1"
+      style="background:#fff;color:#9ca3b8;border:1px solid #e8eaf0;margin-top:8px;">
+      KEEP THIS ONE FOR NOW
+    </button>
+    <p class="btp-login-help btp-login-fine">At least 8 characters. Skipping is fine &mdash;
+      the portal will just ask again next time you sign in.</p>
+  </form>
+</div>
+<?php echo btp_login_styles(); ?>
+    <?php
+    return ob_get_clean();
+}
+
+function btp_handle_change_password() {
+    if (empty($_POST['btp_change_submit']) && empty($_POST['btp_change_skip'])) return;
+    if (!is_user_logged_in()) return;
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'btp_change')) {
+        $GLOBALS['btp_change_error'] = 'This page had been sitting open too long. Try again.';
+        return;
+    }
+
+    $user_id = get_current_user_id();
+
+    // "Keep this one for now" — clear the prompt for this session only, so it
+    // comes back on the next sign-in rather than nagging on every page load.
+    if (!empty($_POST['btp_change_skip'])) {
+        $GLOBALS['btp_change_skipped'] = true;
+        setcookie('btp-skip-' . COOKIEHASH, '1', 0, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true);
+        wp_safe_redirect(btp_portal_base_url());
+        exit;
+    }
+
+    $p1 = (string) ($_POST['btp_new1'] ?? '');
+    $p2 = (string) ($_POST['btp_new2'] ?? '');
+
+    if ($p1 !== $p2)     { $GLOBALS['btp_change_error'] = 'Those two passwords don\'t match.'; return; }
+    if (strlen($p1) < 8) { $GLOBALS['btp_change_error'] = 'Use at least 8 characters.'; return; }
+
+    wp_set_password($p1, $user_id);
+    btp_clear_temp_password($user_id);
+
+    // wp_set_password logs every session out, including this one.
+    wp_set_current_user($user_id);
+    wp_set_auth_cookie($user_id, true, is_ssl());
+    wp_safe_redirect(btp_portal_base_url());
+    exit;
+}
+add_action('template_redirect', 'btp_handle_change_password', 6);
+
+/** True when the signed-in user should see the change-password screen. */
+function btp_should_prompt_change() {
+    if (!is_user_logged_in() || !btp_must_change_password()) return false;
+    if (!empty($_COOKIE['btp-skip-' . COOKIEHASH])) return false;
+    return true;
+}
 
 /** Entry point for the shortcode when the visitor has no portal access. */
 function btp_login_form_html() {
@@ -704,11 +862,12 @@ function btp_users_add() {
     $label = ($role === BTP_ROLE_ADMIN) ? 'Portal admin' : 'Portal user';
 
     if ($self_set) {
-        wp_new_user_notification($user_id, null, 'user');
-        btp_users_notice($label . ' created. An invite is on its way to ' . $email .
-            ' — the link opens the portal and lets them pick their own password.');
+        $temp = btp_issue_temp_password($user_id);
+        btp_users_notice($label . ' created. Password: <strong>' . esc_html($temp) . '</strong>' .
+            ' — also emailed to ' . esc_html($email) . '. The portal will ask them to pick their own.');
     } else {
-        btp_users_notice($label . ' created with the password you typed. Hand it over in person and have them change it.');
+        btp_flag_temp_password($user_id);
+        btp_users_notice($label . ' created with the password you typed. The portal will ask them to change it on first sign-in.');
     }
 }
 
@@ -957,9 +1116,12 @@ function btp_rest_user_create($req) {
     if (is_wp_error($id)) return new WP_Error('btp_bad', $id->get_error_message(), array('status'=>400));
 
     if ($legacy) update_user_meta($id, 'btp_legacy_name', $legacy);
-    wp_new_user_notification($id, null, 'user');   // invite — they pick their own password
 
-    return rest_ensure_response(btp_rest_user_row(get_userdata($id)));
+    $temp = btp_issue_temp_password($id);
+
+    $row = btp_rest_user_row(get_userdata($id));
+    $row['temp'] = $temp;   // shown to the admin once, never stored in plain text
+    return rest_ensure_response($row);
 }
 
 function btp_rest_user_role($req) {
@@ -998,11 +1160,18 @@ function btp_rest_user_reset($req) {
     if (!($user = get_userdata($id))) {
         return new WP_Error('btp_no_user', 'No such user.', array('status' => 404));
     }
-    $sent = retrieve_password($user->user_login);
-    if (is_wp_error($sent)) {
-        return new WP_Error('btp_reset_failed', 'Could not send the email. Try again shortly.', array('status' => 500));
+
+    // A fresh temporary password rather than a link, so somebody standing at a
+    // machine can be read their way back in without waiting for mail.
+    $pass = btp_issue_temp_password($id);
+    if ($pass === '') {
+        return new WP_Error('btp_reset_failed', 'Could not reset that password.', array('status' => 500));
     }
-    return rest_ensure_response(array('ok' => true, 'email' => $user->user_email));
+
+    return rest_ensure_response(array(
+        'ok' => true, 'email' => $user->user_email,
+        'login' => $user->user_login, 'temp' => $pass,
+    ));
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1011,6 +1180,11 @@ function btp_rest_user_reset($req) {
 
 function btp_stamp_login($user_login, $user) {
     update_user_meta($user->ID, 'btp_last_login', time());
+    // A new sign-in means the "keep this one for now" pass expires, which is
+    // what makes the prompt a recurring nudge instead of a one-time dismissal.
+    if (!headers_sent()) {
+        setcookie('btp-skip-' . COOKIEHASH, ' ', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true);
+    }
 }
 add_action('wp_login', 'btp_stamp_login', 10, 2);
 
