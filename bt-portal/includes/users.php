@@ -407,6 +407,31 @@ function btp_users_menu() {
 }
 add_action('admin_menu', 'btp_users_menu', 20);
 
+/**
+ * Everyone who can actually open the portal — the two portal roles plus any
+ * WordPress administrator, since administrator carries bt_portal_access too.
+ *
+ * Administrators were invisible on this screen before v0.23.0, which meant the
+ * name shown in the portal header for an admin account could not be corrected
+ * here — the most common way to end up signed in as yourself but stamped with
+ * somebody else's name.
+ */
+function btp_all_portal_users() {
+    $users = get_users(array(
+        'role__in' => array_merge(btp_portal_roles(), array('administrator')),
+        'orderby'  => 'display_name',
+        'number'   => 200,
+    ));
+    return $users;
+}
+
+/** How this account gets its portal access. */
+function btp_access_label($user) {
+    if (in_array('administrator', (array) $user->roles, true)) return 'wpadmin';
+    if (in_array(BTP_ROLE_ADMIN, (array) $user->roles, true))  return 'portaladmin';
+    return 'portaluser';
+}
+
 function btp_users_page() {
     if (!current_user_can('bt_manage_portal_users')) {
         wp_die('You do not have permission to manage portal users.');
@@ -414,7 +439,7 @@ function btp_users_page() {
 
     btp_users_handle_post();
 
-    $users = get_users(array('role__in' => btp_portal_roles(), 'orderby' => 'display_name', 'number' => 200));
+    $users = btp_all_portal_users();
 
     $claimed = array();
     foreach ($users as $u) {
@@ -501,46 +526,81 @@ function btp_users_page() {
 
       <hr>
 
-      <h2>Portal users (<?php echo count($users); ?>)</h2>
+      <h2>Who can open the portal (<?php echo count($users); ?>)</h2>
+      <p class="description" style="max-width:680px;">
+        <strong>Shown as</strong> is the name that appears in the portal header and gets stamped on
+        jobs, day notes and completions. It uses <em>Old name</em> when one is set, otherwise the
+        display name. Change either one here and hit Save.
+      </p>
       <table class="wp-list-table widefat fixed striped">
         <thead><tr>
-          <th>Username</th><th>Display name</th><th>Access</th><th>Old name</th>
-          <th>Email</th><th>Last login</th><th style="width:280px;">Actions</th>
+          <th style="width:12%;">Username</th>
+          <th style="width:16%;">Display name</th>
+          <th style="width:12%;">Old name</th>
+          <th style="width:10%;">Shown as</th>
+          <th style="width:12%;">Access</th>
+          <th style="width:14%;">Email</th>
+          <th style="width:10%;">Last login</th>
+          <th>Actions</th>
         </tr></thead>
         <tbody>
         <?php if (!$users) : ?>
-          <tr><td colspan="7">No portal users yet. Nobody but a WordPress administrator can open the portal.</td></tr>
+          <tr><td colspan="8">Nobody can open the portal yet.</td></tr>
         <?php else : foreach ($users as $u) :
-          $last     = get_user_meta($u->ID, 'btp_last_login', true);
-          $legacy   = get_user_meta($u->ID, 'btp_legacy_name', true);
-          $is_admin = in_array(BTP_ROLE_ADMIN, (array) $u->roles, true);
-          $is_self  = ((int) $u->ID === get_current_user_id()); ?>
+          $last    = get_user_meta($u->ID, 'btp_last_login', true);
+          $legacy  = get_user_meta($u->ID, 'btp_legacy_name', true);
+          $access  = btp_access_label($u);
+          $is_self = ((int) $u->ID === get_current_user_id());
+          $fid     = 'btp-row-' . (int) $u->ID;
+          $shown   = $legacy ? $legacy : $u->display_name; ?>
           <tr>
             <td><strong><?php echo esc_html($u->user_login); ?></strong></td>
-            <td><?php echo esc_html($u->display_name); ?></td>
-            <td><?php echo $is_admin
-                  ? '<span style="color:#1a1f5e;font-weight:600;">Portal admin</span>'
-                  : 'Portal user'; ?></td>
-            <td><?php echo $legacy ? esc_html($legacy) : '&mdash;'; ?></td>
-            <td><?php echo esc_html($u->user_email); ?></td>
+            <td><input type="text" form="<?php echo esc_attr($fid); ?>" name="btp_edit_name"
+                       value="<?php echo esc_attr($u->display_name); ?>" style="width:100%;"></td>
+            <td>
+              <select form="<?php echo esc_attr($fid); ?>" name="btp_edit_legacy" style="width:100%;">
+                <option value="">&mdash; none &mdash;</option>
+                <?php
+                $opts = btp_legacy_names();
+                if ($legacy && !in_array($legacy, $opts, true)) $opts[] = $legacy;
+                foreach ($opts as $n) :
+                    printf('<option value="%s"%s>%s</option>',
+                        esc_attr($n), selected($legacy, $n, false), esc_html($n));
+                endforeach; ?>
+              </select>
+            </td>
+            <td><strong><?php echo esc_html($shown); ?></strong></td>
+            <td>
+              <?php if ($access === 'wpadmin') : ?>
+                <span title="Access comes from the WordPress administrator role">WordPress admin</span>
+              <?php elseif ($access === 'portaladmin') : ?>
+                <span style="color:#1a1f5e;font-weight:600;">Portal admin</span>
+              <?php else : ?>
+                Portal user
+              <?php endif; ?>
+            </td>
+            <td style="word-break:break-all;"><?php echo esc_html($u->user_email); ?></td>
             <td><?php echo $last ? esc_html(date_i18n('M j, g:i a', (int) $last)) : '&mdash;'; ?></td>
             <td>
-              <form method="post" style="display:inline">
+              <form id="<?php echo esc_attr($fid); ?>" method="post" style="display:flex;gap:4px;flex-wrap:wrap;">
                 <?php wp_nonce_field('btp_user_row_' . $u->ID); ?>
                 <input type="hidden" name="btp_user_id" value="<?php echo (int) $u->ID; ?>">
+                <button class="button button-primary button-small" name="btp_admin_action" value="save">Save</button>
                 <button class="button button-small" name="btp_admin_action" value="reset">Send reset</button>
-                <?php if ($is_admin) : ?>
+                <?php if ($access === 'wpadmin') : ?>
+                  <span class="description" style="align-self:center;">Role managed in Users</span>
+                <?php elseif ($access === 'portaladmin') : ?>
                   <button class="button button-small" name="btp_admin_action" value="demote"
+                    <?php disabled($is_self); ?>>Remove admin</button>
+                  <button class="button button-small" name="btp_admin_action" value="remove"
                     <?php disabled($is_self); ?>
-                    title="<?php echo $is_self ? 'You cannot remove your own admin access' : ''; ?>">
-                    Remove admin</button>
+                    onclick="return confirm('Remove portal access for <?php echo esc_js($u->user_login); ?>?')">Remove access</button>
                 <?php else : ?>
                   <button class="button button-small" name="btp_admin_action" value="promote">Make admin</button>
+                  <button class="button button-small" name="btp_admin_action" value="remove"
+                    <?php disabled($is_self); ?>
+                    onclick="return confirm('Remove portal access for <?php echo esc_js($u->user_login); ?>?')">Remove access</button>
                 <?php endif; ?>
-                <button class="button button-small" name="btp_admin_action" value="remove"
-                  <?php disabled($is_self); ?>
-                  onclick="return confirm('Remove portal access for <?php echo esc_js($u->user_login); ?>?')">
-                  Remove access</button>
               </form>
             </td>
           </tr>
@@ -571,6 +631,16 @@ function btp_users_handle_post() {
         return;
     }
 
+    // An administrator's portal access comes from the administrator role. It is
+    // not this screen's to give or take away — that happens under Users.
+    $target = get_userdata($user_id);
+    if ($target && in_array('administrator', (array) $target->roles, true)
+        && in_array($action, array('promote', 'demote', 'remove'), true)) {
+        btp_users_notice('That is a WordPress administrator. Change their role under Users instead.', 'error');
+        return;
+    }
+
+    if ($action === 'save')    btp_users_save_identity($user_id);
     if ($action === 'reset')   btp_users_send_reset($user_id);
     if ($action === 'remove')  btp_users_remove($user_id);
     if ($action === 'promote') btp_users_set_role($user_id, BTP_ROLE_ADMIN);
@@ -628,6 +698,31 @@ function btp_users_add() {
     }
 }
 
+/**
+ * Update the two fields that decide what the portal header says and what gets
+ * stamped on new rows. Old name wins when it is set.
+ */
+function btp_users_save_identity($user_id) {
+    if (!($user = get_userdata($user_id))) return;
+
+    $name   = sanitize_text_field(wp_unslash($_POST['btp_edit_name'] ?? ''));
+    $legacy = sanitize_text_field(wp_unslash($_POST['btp_edit_legacy'] ?? ''));
+
+    if ($name !== '' && $name !== $user->display_name) {
+        wp_update_user(array('ID' => $user_id, 'display_name' => $name));
+    }
+
+    $current = get_user_meta($user_id, 'btp_legacy_name', true);
+    if ($legacy === '') {
+        delete_user_meta($user_id, 'btp_legacy_name');
+    } elseif ($legacy !== $current) {
+        update_user_meta($user_id, 'btp_legacy_name', $legacy);
+    }
+
+    $shown = $legacy !== '' ? $legacy : ($name !== '' ? $name : $user->display_name);
+    btp_users_notice($user->user_login . ' now shows in the portal as "' . $shown . '".');
+}
+
 function btp_users_send_reset($user_id) {
     if (!($user = get_userdata($user_id))) return;
     retrieve_password($user->user_login);
@@ -668,3 +763,23 @@ function btp_stamp_login($user_login, $user) {
     update_user_meta($user->ID, 'btp_last_login', time());
 }
 add_action('wp_login', 'btp_stamp_login', 10, 2);
+
+/* ─────────────────────────────────────────────────────────────────────────
+   NO CACHING ON THE PORTAL PAGE
+
+   Before v0.21.0 the portal rendered identically for everybody, so a page
+   cache was harmless. It now carries the signed-in name in the header and in
+   btUserName, so a cached copy would show one person's name to the next
+   person who opened it — and stamp their work with it.
+   ───────────────────────────────────────────────────────────────────── */
+
+function btp_no_cache_portal() {
+    $portal_id = (int) get_option('btp_portal_page_id', 0);
+    if (!$portal_id || get_queried_object_id() !== $portal_id) return;
+
+    if (!defined('DONOTCACHEPAGE'))   define('DONOTCACHEPAGE', true);
+    if (!defined('DONOTCACHEOBJECT')) define('DONOTCACHEOBJECT', true);
+    if (!defined('DONOTCACHEDB'))     define('DONOTCACHEDB', true);
+    nocache_headers();
+}
+add_action('template_redirect', 'btp_no_cache_portal', 1);
