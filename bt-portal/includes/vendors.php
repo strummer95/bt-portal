@@ -106,17 +106,37 @@ function btp_vendor_key() {
         }
     }
 
+    // A key already parked in the database by an earlier run, because the
+    // uploads directory could not be written to.
+    $fallback = get_option('btp_vendor_key_fallback');
+    if ($fallback) {
+        $key = base64_decode($fallback);
+        return $key;
+    }
+
     $raw = function_exists('sodium_crypto_secretbox_keygen')
         ? sodium_crypto_secretbox_keygen()
         : random_bytes(32);
 
-    file_put_contents($path, "<?php\n// BT Portal vendor credential key. Do not delete — the stored\n"
+    $written = @file_put_contents($path,
+        "<?php\n// BT Portal vendor credential key. Do not delete — the stored\n"
         . "// vendor passwords cannot be read without it.\nreturn '" . base64_encode($raw) . "';\n");
-    @chmod($path, 0600);
 
-    // Belt and braces: uploads is web-readable on most hosts.
-    $ht = trailingslashit($dir['basedir']) . '.htaccess';
-    if (!file_exists($ht)) @file_put_contents($ht, "<FilesMatch \"^\\.bt-vendor-key\\.php$\">\nRequire all denied\n</FilesMatch>\n");
+    if ($written === false) {
+        /* If uploads is not writable, the key would be regenerated on every
+           single request and every stored password would decrypt to nothing —
+           silently, and only noticed when someone pressed SHOW. Parking it in
+           the database is weaker than a file outside the database, but a key
+           that survives is worth more than a stronger one that doesn't. The
+           admin notice says so plainly. */
+        update_option('btp_vendor_key_fallback', base64_encode($raw), false);
+        update_option('btp_vendor_key_in_db', 1);
+    } else {
+        @chmod($path, 0600);
+        // Belt and braces: uploads is web-readable on most hosts.
+        $ht = trailingslashit($dir['basedir']) . '.htaccess';
+        if (!file_exists($ht)) @file_put_contents($ht, "<FilesMatch \"^\\.bt-vendor-key\\.php$\">\nRequire all denied\n</FilesMatch>\n");
+    }
 
     $key = $raw;
     return $key;
@@ -341,3 +361,16 @@ function btp_rest_vendor_log() {
     }
     return rest_ensure_response(array('log' => $out));
 }
+
+/** Say so if the credential key had to fall back into the database. */
+function btp_vendor_key_notice() {
+    if (!current_user_can('manage_options')) return;
+    if (!get_option('btp_vendor_key_in_db')) return;
+
+    echo '<div class="notice notice-warning"><p><strong>BT Portal:</strong> the vendor password key '
+       . 'could not be written to the uploads folder, so it is stored in the database instead. The '
+       . 'passwords still work, but a database backup now contains both the locked box and its key. '
+       . 'Fixing the uploads folder permissions, or adding a BT_VENDOR_KEY line to wp-config.php, '
+       . 'restores the stronger setup.</p></div>';
+}
+add_action('admin_notices', 'btp_vendor_key_notice');
