@@ -150,216 +150,6 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .btv-msg.ok { background:#eaf7ee; border-left:3px solid #2e7d32; color:#1b5e20; }
 #bt-schedule-app .btv-msg.err { background:#fdecea; border-left:3px solid #c0392b; color:#7d2018; }
 
-/* ── VENDORS (Other > Vendors) ──
-   The old shared spreadsheet. Passwords are encrypted server side and never
-   ride along in the list payload — a reveal is its own POST, and every reveal
-   is written to an audit row. */
-
-let btvData = [], btvCats = [], btvCanEdit = false, btvLoaded = false, btvEditing = null;
-
-async function btvLoad(force) {
-  if (btvLoaded && !force) return;
-  try {
-    const res = await btFetch('/vendors', 'GET');
-    btvData    = res.vendors || [];
-    btvCats    = res.categories || [];
-    btvCanEdit = !!res.can_edit;
-    btvLoaded  = true;
-
-    const sel = document.getElementById('btvCat');
-    if (sel && sel.options.length <= 1) {
-      btvCats.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c; o.textContent = c;
-        sel.appendChild(o);
-      });
-    }
-    const add = document.getElementById('btvAddBtn');
-    if (add) add.style.display = btvCanEdit ? '' : 'none';
-    btvRender();
-  } catch (e) {
-    document.getElementById('btvList').innerHTML =
-      '<p class="btv-empty">Could not load the vendor list. Refresh to try again.</p>';
-  }
-}
-
-function btvEsc(v) {
-  return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-function btvMsg(text, kind) {
-  const el = document.getElementById('btvMsg');
-  el.innerHTML = text ? '<div class="btv-msg ' + (kind||'ok') + '">' + btvEsc(text) + '</div>' : '';
-  if (text) setTimeout(() => { el.innerHTML = ''; }, 6000);
-}
-
-function btvRender() {
-  const q   = (document.getElementById('btvSearch').value || '').toLowerCase().trim();
-  const cat = document.getElementById('btvCat').value;
-
-  const list = btvData.filter(v => {
-    if (cat && v.category !== cat) return false;
-    if (!q) return true;
-    return [v.name, v.account_no, v.phone, v.fax, v.login, v.notes, v.address, v.website]
-      .join(' ').toLowerCase().includes(q);
-  });
-
-  document.getElementById('btvCount').textContent =
-    list.length + (list.length === 1 ? ' vendor' : ' vendors');
-
-  const html = list.map(btvCard).join('');
-  document.getElementById('btvList').innerHTML =
-    (btvEditing !== null ? btvFormHtml(btvEditing) : '') +
-    (html || '<p class="btv-empty">Nothing matches that.</p>');
-}
-
-function btvRow(k, v) {
-  if (!v) return '';
-  return '<div class="btv-k">' + k + '</div><div class="btv-v">' + v + '</div>';
-}
-
-function btvCard(v) {
-  const tel  = v.phone ? '<a href="tel:' + btvEsc(v.phone.replace(/[^0-9+*]/g,'')) + '">' + btvEsc(v.phone) + '</a>' : '';
-  const site = v.website ? '<a href="' + btvEsc(v.website) + '" target="_blank" rel="noopener">' +
-               btvEsc(v.website.replace(/^https?:\/\//,'').replace(/\/$/,'')) + '</a>' : '';
-
-  const secret = v.has_secret
-    ? '<div class="btv-secret" id="btvSec' + v.id + '">' +
-        '<span class="btv-dots">••••••••</span>' +
-        '<button type="button" class="btv-mini" onclick="btvReveal(' + v.id + ')">SHOW</button>' +
-      '</div>'
-    : '';
-
-  return '' +
-    '<div class="btv-card">' +
-      '<h3>' + btvEsc(v.name) + '</h3>' +
-      (v.category ? '<span class="btv-cat">' + btvEsc(v.category) + '</span>' : '') +
-      '<div class="btv-kv">' +
-        btvRow('Phone', tel) +
-        btvRow('Fax', btvEsc(v.fax)) +
-        btvRow('Account', btvEsc(v.account_no)) +
-        btvRow('Login', btvEsc(v.login)) +
-        btvRow('Password', secret) +
-        btvRow('Website', site) +
-        btvRow('Address', btvEsc(v.address).replace(/\n/g,'<br>')) +
-      '</div>' +
-      (v.notes ? '<div class="btv-note">' + btvEsc(v.notes) + '</div>' : '') +
-      (btvCanEdit ?
-        '<div class="btv-ops">' +
-          '<button type="button" class="btv-mini" onclick="btvEdit(' + v.id + ')">EDIT</button>' +
-          '<button type="button" class="btv-mini" onclick="btvDelete(' + v.id + ',\'' + btvEsc(v.name) + '\')">DELETE</button>' +
-        '</div>' : '') +
-    '</div>';
-}
-
-async function btvReveal(id) {
-  const box = document.getElementById('btvSec' + id);
-  try {
-    const res = await btFetch('/vendors/' + id + '/secret', 'POST', {});
-    box.innerHTML =
-      '<code style="font-size:13px;color:#0f1240;word-break:break-all;">' + btvEsc(res.secret) + '</code>' +
-      '<button type="button" class="btv-mini" onclick="btvCopy(' + id + ',\'' +
-        btvEsc(res.secret).replace(/'/g,"\\'") + '\')">COPY</button>';
-    // Don't leave it sitting on screen for the next person at that machine.
-    setTimeout(() => {
-      const b = document.getElementById('btvSec' + id);
-      if (b) b.innerHTML = '<span class="btv-dots">••••••••</span>' +
-        '<button type="button" class="btv-mini" onclick="btvReveal(' + id + ')">SHOW</button>';
-    }, 30000);
-  } catch (e) {
-    btvMsg('Could not read that password.', 'err');
-  }
-}
-
-function btvCopy(id, text) {
-  const done = () => btvMsg('Password copied.', 'ok');
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).then(done).catch(() => {});
-  } else {
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); done(); } catch (e) {}
-    document.body.removeChild(ta);
-  }
-}
-
-function btvNew()  { btvEditing = {id:0, category:'Apparel'}; btvRender(); }
-function btvEdit(id) {
-  const v = btvData.find(x => x.id === id);
-  if (v) { btvEditing = Object.assign({}, v); btvRender(); }
-}
-function btvCancel() { btvEditing = null; btvRender(); }
-
-function btvFormHtml(v) {
-  const catOpts = btvCats.map(c =>
-    '<option value="' + btvEsc(c) + '"' + (c === v.category ? ' selected' : '') + '>' + btvEsc(c) + '</option>').join('');
-
-  return '' +
-    '<div class="btv-form">' +
-      '<div class="btv-grid">' +
-        '<div><label>Vendor name</label><input id="btvfName" value="' + btvEsc(v.name) + '"></div>' +
-        '<div><label>Category</label><select id="btvfCat">' + catOpts + '</select></div>' +
-        '<div><label>Phone</label><input id="btvfPhone" value="' + btvEsc(v.phone) + '"></div>' +
-        '<div><label>Fax</label><input id="btvfFax" value="' + btvEsc(v.fax) + '"></div>' +
-        '<div><label>Account #</label><input id="btvfAcct" value="' + btvEsc(v.account_no) + '"></div>' +
-        '<div><label>Login</label><input id="btvfLogin" value="' + btvEsc(v.login) + '"></div>' +
-        '<div><label>Password' + (v.has_secret ? ' (blank = leave as is)' : '') + '</label>' +
-          '<input id="btvfSecret" type="text" placeholder="' + (v.has_secret ? 'unchanged' : '') + '"></div>' +
-        '<div><label>Website</label><input id="btvfSite" value="' + btvEsc(v.website) + '"></div>' +
-      '</div>' +
-      '<div class="btv-grid" style="margin-top:10px;">' +
-        '<div><label>Address</label><textarea id="btvfAddr">' + btvEsc(v.address) + '</textarea></div>' +
-        '<div><label>Notes / rep</label><textarea id="btvfNotes">' + btvEsc(v.notes) + '</textarea></div>' +
-      '</div>' +
-      '<div class="btv-ops">' +
-        '<button type="button" class="btv-mini" style="background:#1a1f5e;color:#fff;border-color:#1a1f5e;" ' +
-          'onclick="btvSave(' + (v.id || 0) + ')">SAVE</button>' +
-        '<button type="button" class="btv-mini" onclick="btvCancel()">CANCEL</button>' +
-      '</div>' +
-    '</div>';
-}
-
-async function btvSave(id) {
-  const body = {
-    name:       document.getElementById('btvfName').value.trim(),
-    category:   document.getElementById('btvfCat').value,
-    phone:      document.getElementById('btvfPhone').value.trim(),
-    fax:        document.getElementById('btvfFax').value.trim(),
-    account_no: document.getElementById('btvfAcct').value.trim(),
-    login:      document.getElementById('btvfLogin').value.trim(),
-    website:    document.getElementById('btvfSite').value.trim(),
-    address:    document.getElementById('btvfAddr').value.trim(),
-    notes:      document.getElementById('btvfNotes').value.trim()
-  };
-  const pw = document.getElementById('btvfSecret').value;
-  // Only send the password when something was typed, so an edit of the phone
-  // number can't silently wipe a password nobody retyped.
-  if (pw !== '') body.secret = pw;
-
-  if (!body.name) { btvMsg('A vendor name is needed.', 'err'); return; }
-
-  try {
-    await btFetch(id ? '/vendors/' + id : '/vendors', 'POST', body);
-    btvEditing = null;
-    await btvLoad(true);
-    btvMsg(body.name + ' saved.', 'ok');
-  } catch (e) {
-    btvMsg('Could not save that vendor.', 'err');
-  }
-}
-
-async function btvDelete(id, name) {
-  if (!confirm('Delete ' + name + ' from the vendor list?')) return;
-  try {
-    await btFetch('/vendors/' + id, 'DELETE', {});
-    await btvLoad(true);
-    btvMsg(name + ' deleted.', 'ok');
-  } catch (e) {
-    btvMsg('Could not delete that vendor.', 'err');
-  }
-}
-
 /* ── ACCOUNT PANEL ── */
 #btpAcctBg { display:none; position:fixed; inset:0; background:rgba(15,18,64,.55); z-index:999998; }
 #btpAcctPanel { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -3740,6 +3530,216 @@ function btGoToOverdue() {
 
 function btDownloadArtFiles() {
   window.location.href = 'https://www.boomerts.com/wp-content/uploads/2026/03/btart-open.zip';
+}
+
+/* ── VENDORS (Other > Vendors) ──
+   The old shared spreadsheet. Passwords are encrypted server side and never
+   ride along in the list payload — a reveal is its own POST, and every reveal
+   is written to an audit row. */
+
+let btvData = [], btvCats = [], btvCanEdit = false, btvLoaded = false, btvEditing = null;
+
+async function btvLoad(force) {
+  if (btvLoaded && !force) return;
+  try {
+    const res = await btFetch('/vendors', 'GET');
+    btvData    = res.vendors || [];
+    btvCats    = res.categories || [];
+    btvCanEdit = !!res.can_edit;
+    btvLoaded  = true;
+
+    const sel = document.getElementById('btvCat');
+    if (sel && sel.options.length <= 1) {
+      btvCats.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        sel.appendChild(o);
+      });
+    }
+    const add = document.getElementById('btvAddBtn');
+    if (add) add.style.display = btvCanEdit ? '' : 'none';
+    btvRender();
+  } catch (e) {
+    document.getElementById('btvList').innerHTML =
+      '<p class="btv-empty">Could not load the vendor list. Refresh to try again.</p>';
+  }
+}
+
+function btvEsc(v) {
+  return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function btvMsg(text, kind) {
+  const el = document.getElementById('btvMsg');
+  el.innerHTML = text ? '<div class="btv-msg ' + (kind||'ok') + '">' + btvEsc(text) + '</div>' : '';
+  if (text) setTimeout(() => { el.innerHTML = ''; }, 6000);
+}
+
+function btvRender() {
+  const q   = (document.getElementById('btvSearch').value || '').toLowerCase().trim();
+  const cat = document.getElementById('btvCat').value;
+
+  const list = btvData.filter(v => {
+    if (cat && v.category !== cat) return false;
+    if (!q) return true;
+    return [v.name, v.account_no, v.phone, v.fax, v.login, v.notes, v.address, v.website]
+      .join(' ').toLowerCase().includes(q);
+  });
+
+  document.getElementById('btvCount').textContent =
+    list.length + (list.length === 1 ? ' vendor' : ' vendors');
+
+  const html = list.map(btvCard).join('');
+  document.getElementById('btvList').innerHTML =
+    (btvEditing !== null ? btvFormHtml(btvEditing) : '') +
+    (html || '<p class="btv-empty">Nothing matches that.</p>');
+}
+
+function btvRow(k, v) {
+  if (!v) return '';
+  return '<div class="btv-k">' + k + '</div><div class="btv-v">' + v + '</div>';
+}
+
+function btvCard(v) {
+  const tel  = v.phone ? '<a href="tel:' + btvEsc(v.phone.replace(/[^0-9+*]/g,'')) + '">' + btvEsc(v.phone) + '</a>' : '';
+  const site = v.website ? '<a href="' + btvEsc(v.website) + '" target="_blank" rel="noopener">' +
+               btvEsc(v.website.replace(/^https?:\/\//,'').replace(/\/$/,'')) + '</a>' : '';
+
+  const secret = v.has_secret
+    ? '<div class="btv-secret" id="btvSec' + v.id + '">' +
+        '<span class="btv-dots">••••••••</span>' +
+        '<button type="button" class="btv-mini" onclick="btvReveal(' + v.id + ')">SHOW</button>' +
+      '</div>'
+    : '';
+
+  return '' +
+    '<div class="btv-card">' +
+      '<h3>' + btvEsc(v.name) + '</h3>' +
+      (v.category ? '<span class="btv-cat">' + btvEsc(v.category) + '</span>' : '') +
+      '<div class="btv-kv">' +
+        btvRow('Phone', tel) +
+        btvRow('Fax', btvEsc(v.fax)) +
+        btvRow('Account', btvEsc(v.account_no)) +
+        btvRow('Login', btvEsc(v.login)) +
+        btvRow('Password', secret) +
+        btvRow('Website', site) +
+        btvRow('Address', btvEsc(v.address).replace(/\n/g,'<br>')) +
+      '</div>' +
+      (v.notes ? '<div class="btv-note">' + btvEsc(v.notes) + '</div>' : '') +
+      (btvCanEdit ?
+        '<div class="btv-ops">' +
+          '<button type="button" class="btv-mini" onclick="btvEdit(' + v.id + ')">EDIT</button>' +
+          '<button type="button" class="btv-mini" onclick="btvDelete(' + v.id + ',\'' + btvEsc(v.name) + '\')">DELETE</button>' +
+        '</div>' : '') +
+    '</div>';
+}
+
+async function btvReveal(id) {
+  const box = document.getElementById('btvSec' + id);
+  try {
+    const res = await btFetch('/vendors/' + id + '/secret', 'POST', {});
+    box.innerHTML =
+      '<code style="font-size:13px;color:#0f1240;word-break:break-all;">' + btvEsc(res.secret) + '</code>' +
+      '<button type="button" class="btv-mini" onclick="btvCopy(' + id + ',\'' +
+        btvEsc(res.secret).replace(/'/g,"\\'") + '\')">COPY</button>';
+    // Don't leave it sitting on screen for the next person at that machine.
+    setTimeout(() => {
+      const b = document.getElementById('btvSec' + id);
+      if (b) b.innerHTML = '<span class="btv-dots">••••••••</span>' +
+        '<button type="button" class="btv-mini" onclick="btvReveal(' + id + ')">SHOW</button>';
+    }, 30000);
+  } catch (e) {
+    btvMsg('Could not read that password.', 'err');
+  }
+}
+
+function btvCopy(id, text) {
+  const done = () => btvMsg('Password copied.', 'ok');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {});
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+}
+
+function btvNew()  { btvEditing = {id:0, category:'Apparel'}; btvRender(); }
+function btvEdit(id) {
+  const v = btvData.find(x => x.id === id);
+  if (v) { btvEditing = Object.assign({}, v); btvRender(); }
+}
+function btvCancel() { btvEditing = null; btvRender(); }
+
+function btvFormHtml(v) {
+  const catOpts = btvCats.map(c =>
+    '<option value="' + btvEsc(c) + '"' + (c === v.category ? ' selected' : '') + '>' + btvEsc(c) + '</option>').join('');
+
+  return '' +
+    '<div class="btv-form">' +
+      '<div class="btv-grid">' +
+        '<div><label>Vendor name</label><input id="btvfName" value="' + btvEsc(v.name) + '"></div>' +
+        '<div><label>Category</label><select id="btvfCat">' + catOpts + '</select></div>' +
+        '<div><label>Phone</label><input id="btvfPhone" value="' + btvEsc(v.phone) + '"></div>' +
+        '<div><label>Fax</label><input id="btvfFax" value="' + btvEsc(v.fax) + '"></div>' +
+        '<div><label>Account #</label><input id="btvfAcct" value="' + btvEsc(v.account_no) + '"></div>' +
+        '<div><label>Login</label><input id="btvfLogin" value="' + btvEsc(v.login) + '"></div>' +
+        '<div><label>Password' + (v.has_secret ? ' (blank = leave as is)' : '') + '</label>' +
+          '<input id="btvfSecret" type="text" placeholder="' + (v.has_secret ? 'unchanged' : '') + '"></div>' +
+        '<div><label>Website</label><input id="btvfSite" value="' + btvEsc(v.website) + '"></div>' +
+      '</div>' +
+      '<div class="btv-grid" style="margin-top:10px;">' +
+        '<div><label>Address</label><textarea id="btvfAddr">' + btvEsc(v.address) + '</textarea></div>' +
+        '<div><label>Notes / rep</label><textarea id="btvfNotes">' + btvEsc(v.notes) + '</textarea></div>' +
+      '</div>' +
+      '<div class="btv-ops">' +
+        '<button type="button" class="btv-mini" style="background:#1a1f5e;color:#fff;border-color:#1a1f5e;" ' +
+          'onclick="btvSave(' + (v.id || 0) + ')">SAVE</button>' +
+        '<button type="button" class="btv-mini" onclick="btvCancel()">CANCEL</button>' +
+      '</div>' +
+    '</div>';
+}
+
+async function btvSave(id) {
+  const body = {
+    name:       document.getElementById('btvfName').value.trim(),
+    category:   document.getElementById('btvfCat').value,
+    phone:      document.getElementById('btvfPhone').value.trim(),
+    fax:        document.getElementById('btvfFax').value.trim(),
+    account_no: document.getElementById('btvfAcct').value.trim(),
+    login:      document.getElementById('btvfLogin').value.trim(),
+    website:    document.getElementById('btvfSite').value.trim(),
+    address:    document.getElementById('btvfAddr').value.trim(),
+    notes:      document.getElementById('btvfNotes').value.trim()
+  };
+  const pw = document.getElementById('btvfSecret').value;
+  // Only send the password when something was typed, so an edit of the phone
+  // number can't silently wipe a password nobody retyped.
+  if (pw !== '') body.secret = pw;
+
+  if (!body.name) { btvMsg('A vendor name is needed.', 'err'); return; }
+
+  try {
+    await btFetch(id ? '/vendors/' + id : '/vendors', 'POST', body);
+    btvEditing = null;
+    await btvLoad(true);
+    btvMsg(body.name + ' saved.', 'ok');
+  } catch (e) {
+    btvMsg('Could not save that vendor.', 'err');
+  }
+}
+
+async function btvDelete(id, name) {
+  if (!confirm('Delete ' + name + ' from the vendor list?')) return;
+  try {
+    await btFetch('/vendors/' + id, 'DELETE', {});
+    await btvLoad(true);
+    btvMsg(name + ' deleted.', 'ok');
+  } catch (e) {
+    btvMsg('Could not delete that vendor.', 'err');
+  }
 }
 
 /* ── ACCOUNT PANEL ──
