@@ -78,6 +78,15 @@ function btp_vendor_install() {
 }
 add_action('init', 'btp_vendor_install', 2);
 
+/* Later additions run on their own, after the table exists, so they reach
+   sites where the first import already happened. */
+function btp_vendor_seed_later() {
+    global $wpdb;
+    if ( ! get_option('btp_vendor_db_version') ) return;
+    if ( function_exists('btp_vendor_seed_2') ) btp_vendor_seed_2();
+}
+add_action('init', 'btp_vendor_seed_later', 3);
+
 /* ─────────────────────────────────────────────────────────────────────────
    ENCRYPTION
    ───────────────────────────────────────────────────────────────────── */

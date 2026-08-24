@@ -353,3 +353,93 @@ function btp_vendor_seed_data() {
 
     );
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BATCH 2 — the rows below the fold
+
+   The first import came from a paste that stopped at White Mountain Pennant.
+   The sheet carried on past it with the accounts that actually run the place:
+   the server, AWS, the social profiles, the shop machines.
+
+   Batches are additive and matched on name, so nothing already in the portal
+   is touched and re-running is harmless.
+   ───────────────────────────────────────────────────────────────────── */
+
+function btp_vendor_seed_batch( $key, $rows ) {
+    global $wpdb;
+    $t = btp_vendor_table();
+
+    if ( get_option( 'btp_vendor_seed_' . $key ) ) return;
+
+    foreach ( $rows as $v ) {
+        $exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t WHERE name = %s", $v['name'] ) );
+        if ( $exists ) continue;
+
+        $secret = isset( $v['secret'] ) ? $v['secret'] : '';
+        unset( $v['secret'] );
+
+        $wpdb->insert( $t, array_merge( array(
+            'name'       => '',
+            'category'   => 'Other',
+            'phone'      => '',
+            'fax'        => '',
+            'account_no' => '',
+            'login'      => '',
+            'website'    => '',
+            'address'    => '',
+            'notes'      => '',
+            'secret'     => $secret === '' ? '' : btp_vendor_encrypt( $secret ),
+            'updated_at' => current_time( 'mysql' ),
+        ), $v ) );
+    }
+
+    update_option( 'btp_vendor_seed_' . $key, 1 );
+}
+
+function btp_vendor_seed_2() {
+    btp_vendor_seed_batch( '2', array(
+
+        // ── SOCIAL ────────────────────────────────────────────────────────
+        array('name'=>'Facebook','category'=>'Social',
+            'login'=>'boomertee@me.com','secret'=>'Boomer#2024'),
+
+        array('name'=>'Instagram','category'=>'Social',
+            'login'=>'boomerts','secret'=>'Digital$01'),
+
+        array('name'=>'TikTok','category'=>'Social',
+            'login'=>'boomerts','secret'=>'Digital$012'),
+
+        array('name'=>'YouTube','category'=>'Social',
+            'login'=>'vendors@boomerts.com','secret'=>'Digital$01'),
+
+        array('name'=>'Spotify','category'=>'Social',
+            'login'=>'vendors@boomerts.com','secret'=>'Digital$01'),
+
+        array('name'=>'SocialBee','category'=>'Marketing',
+            'login'=>'dillon@boomerts.com','secret'=>'Digital$0123'),
+
+        // ── INFRASTRUCTURE ────────────────────────────────────────────────
+        array('name'=>'AWS','category'=>'Internal',
+            'account_no'=>'879381286523','login'=>'dillon','secret'=>'Boomer$012',
+            'notes'=>'Runs the website. Losing this account takes boomerts.com with it.'),
+
+        array('name'=>'New BT Server (Synology)','category'=>'Internal',
+            'login'=>'Ryan','secret'=>'Digital$0203',
+            'website'=>'https://boomers.synology.me:5001',
+            'notes'=>"Network path: \\\\BoomerTs\\BTServer"),
+
+        array('name'=>'WordPress (boomerts.com)','category'=>'Internal',
+            'login'=>'boomer@boomerts.com',
+            'notes'=>'No password was recorded on the old sheet — fill it in here.'),
+
+        // ── SHOP MACHINES ─────────────────────────────────────────────────
+        array('name'=>'Roland Cutter Laptop','category'=>'Equipment',
+            'login'=>'BoomerTsRoland@outlook.com','secret'=>'Digital01',
+            'notes'=>'Windows login for the laptop driving the Roland cutter.'),
+
+        array('name'=>'Windows (production)','category'=>'Internal',
+            'login'=>'BoomerTsProduction@gmail.com','secret'=>'Digital$01',
+            'notes'=>'Windows login on the production machines.'),
+
+    ) );
+}
