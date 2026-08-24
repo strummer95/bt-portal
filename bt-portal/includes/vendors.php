@@ -240,7 +240,8 @@ function btp_rest_vendors() {
 
 function btp_vendor_categories() {
     return array('Apparel', 'Decoration', 'Equipment', 'Supplies', 'Promo',
-                 'Shipping', 'Software', 'Utilities', 'Financial', 'Internal', 'Other');
+                 'Shipping', 'Software', 'Social', 'Marketing', 'Utilities',
+                 'Financial', 'Internal', 'Other');
 }
 
 function btp_vendor_fields_from_request($req) {
