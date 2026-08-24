@@ -151,7 +151,13 @@ add_filter('retrieve_password_message', 'btp_reset_message', 10, 4);
 
 function btp_handle_login() {
     if (empty($_POST['btp_login_submit'])) return;
-    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'btp_login')) return;
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'btp_login')) {
+        // Silently returning here made a stale form look like a rejected
+        // password, which is the worst possible thing to tell someone who just
+        // typed the right one.
+        $GLOBALS['btp_login_error'] = 'This page had been sitting open too long. Try again.';
+        return;
+    }
 
     $login = sanitize_user(wp_unslash($_POST['btp_user'] ?? ''));
     $key   = 'btp_fail_' . md5($login . '|' . btp_client_ip());
@@ -212,7 +218,10 @@ function btp_handle_setpass() {
 
     if (($_GET['btp_action'] ?? '') !== 'setpass') return;
     if (empty($_POST['btp_setpass_submit'])) return;
-    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'btp_setpass')) return;
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'btp_setpass')) {
+        $GLOBALS['btp_setpass_error'] = 'This page had been sitting open too long. Try again.';
+        return;
+    }
 
     $user = btp_setpass_user();
     if (is_wp_error($user)) {
@@ -587,6 +596,8 @@ function btp_users_page() {
                 <input type="hidden" name="btp_user_id" value="<?php echo (int) $u->ID; ?>">
                 <button class="button button-primary button-small" name="btp_admin_action" value="save">Save</button>
                 <button class="button button-small" name="btp_admin_action" value="reset">Send reset</button>
+                <button class="button button-small" name="btp_admin_action" value="unlock"
+                  title="Clear the 15 minute cooldown after too many failed logins">Unlock</button>
                 <?php if ($access === 'wpadmin') : ?>
                   <span class="description" style="align-self:center;">Role managed in Users</span>
                 <?php elseif ($access === 'portaladmin') : ?>
@@ -640,6 +651,7 @@ function btp_users_handle_post() {
         return;
     }
 
+    if ($action === 'unlock')  btp_users_unlock($user_id);
     if ($action === 'save')    btp_users_save_identity($user_id);
     if ($action === 'reset')   btp_users_send_reset($user_id);
     if ($action === 'remove')  btp_users_remove($user_id);
@@ -721,6 +733,23 @@ function btp_users_save_identity($user_id) {
 
     $shown = $legacy !== '' ? $legacy : ($name !== '' ? $name : $user->display_name);
     btp_users_notice($user->user_login . ' now shows in the portal as "' . $shown . '".');
+}
+
+/**
+ * Clear the failed-login cooldown for someone. The counter is keyed on
+ * username + IP, so this clears it for whichever device they are actually on
+ * as well as the shop machines.
+ */
+function btp_users_unlock($user_id) {
+    global $wpdb;
+    if (!($user = get_userdata($user_id))) return;
+
+    // Transients are keyed by a hash of login|ip, so there is nothing to look
+    // up by name — clear every btp_fail_ key and let the rest re-accumulate.
+    $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_btp_fail_%'"
+               . " OR option_name LIKE '_transient_timeout_btp_fail_%'");
+
+    btp_users_notice('Login cooldowns cleared. ' . $user->user_login . ' can try again now.');
 }
 
 function btp_users_send_reset($user_id) {
@@ -909,6 +938,47 @@ add_action('wp_login', 'btp_stamp_login', 10, 2);
    btUserName, so a cached copy would show one person's name to the next
    person who opened it — and stamp their work with it.
    ───────────────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   THE OLD PAGE PASSWORD
+
+   /employees/ was protected by WordPress's built-in page password. The portal
+   has its own login now, so that setting is a second gate in front of the
+   first — staff type a shared password, then their own. Worse, the page
+   password suppresses the_content entirely, so the portal never even renders
+   until it is satisfied.
+
+   Rather than depend on someone remembering to clear it, the portal page
+   ignores it. The setting is left in place, untouched, and an admin notice
+   points at it so it can be cleared properly.
+   ───────────────────────────────────────────────────────────────────── */
+
+function btp_bypass_page_password($required, $post) {
+    $portal_id = (int) get_option('btp_portal_page_id', 0);
+    if ($portal_id && isset($post->ID) && (int) $post->ID === $portal_id) return false;
+    return $required;
+}
+add_filter('post_password_required', 'btp_bypass_page_password', 10, 2);
+
+/** Nag until the redundant page password is actually removed. */
+function btp_page_password_notice() {
+    if (!current_user_can('manage_options')) return;
+
+    $portal_id = (int) get_option('btp_portal_page_id', 0);
+    if (!$portal_id) return;
+
+    $post = get_post($portal_id);
+    if (!$post || $post->post_password === '') return;
+
+    printf(
+        '<div class="notice notice-warning"><p><strong>BT Portal:</strong> the portal page still has '
+      . 'a WordPress page password on it. The portal ignores it now that everyone has their own login, '
+      . 'but it will keep prompting anywhere else that page is reached. '
+      . '<a href="%s">Edit the page</a> and set Visibility back to Public to clear it.</p></div>',
+        esc_url(get_edit_post_link($portal_id, 'raw'))
+    );
+}
+add_action('admin_notices', 'btp_page_password_notice');
 
 function btp_no_cache_portal() {
     $portal_id = (int) get_option('btp_portal_page_id', 0);
