@@ -1846,7 +1846,27 @@ async function btFetch(path, method, body) {
   const opts = { method:method||'GET', headers:{'Content-Type':'application/json','X-WP-Nonce':btNonce} };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(btAPI + path, opts);
-  if (!r.ok) throw new Error('HTTP ' + r.status);
+  if (!r.ok) {
+    /* WordPress puts a real explanation in the body — "WooCommerce is not
+       active", a PHP fatal, an expired nonce. Throwing only the status number
+       meant every one of those read as the same useless message on screen. */
+    let detail = '';
+    try {
+      const txt = await r.text();
+      try {
+        const j = JSON.parse(txt);
+        detail = j.message || '';
+      } catch (parseErr) {
+        // A PHP fatal isn't JSON. Take the first readable line of it.
+        detail = txt.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+      }
+    } catch (readErr) { /* body already consumed or empty */ }
+
+    const err = new Error('HTTP ' + r.status + (detail ? ': ' + detail : ''));
+    err.status = r.status;
+    err.detail = detail;
+    throw err;
+  }
   return r.json();
 }
 
@@ -4333,9 +4353,17 @@ async function btLoadExchanges() {
     btExData = await btFetch('/exchanges');
     btRenderExchanges();
   } catch(e) {
-    const expired = String(e.message||'').indexOf('403') !== -1;
+    const expired = e.status === 403;
+    const detail  = e.detail ? String(e.detail) : '';
+    const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#b71c1c;">' +
-      (expired ? 'Session expired — reload the page.' : 'Error loading exchanges.') + '</td></tr>';
+      (expired
+        ? 'Session expired — reload the page.'
+        : 'Error loading exchanges.' +
+          (detail ? '<div style="margin-top:8px;font-size:12px;color:#7d2018;">' + esc(detail) + '</div>' : '') +
+          '<div style="margin-top:6px;font-size:11px;color:#9ca3b8;">' +
+            esc(e.message || 'no status') + '</div>') +
+      '</td></tr>';
   }
 }
 
