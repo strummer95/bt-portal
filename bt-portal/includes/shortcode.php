@@ -4355,7 +4355,7 @@ async function btLoadExchanges() {
      and on failure walk the page size down rather than showing nothing — a
      short list beats an empty screen, and how far it gets says where the
      limit is. */
-  const sizes = [40, 20, 10, 5, 2];
+  const sizes = [25, 5];
   let lastErr = null, used = null;
 
   for (const n of sizes) {
