@@ -97,7 +97,7 @@ function btp_ex_diag_page() {
           echo '<div class="notice notice-success inline"><p>Cleared.</p></div>';
       }
 
-      if (isset($_GET['sizes'])) btp_ex_diag_sizes();
+      btp_ex_diag_sizes();   // always, it is cheap and cannot hang
       if ($run) btp_ex_diag_run();
       ?>
     </div>

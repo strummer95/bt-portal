@@ -4355,7 +4355,7 @@ async function btLoadExchanges() {
      and on failure walk the page size down rather than showing nothing — a
      short list beats an empty screen, and how far it gets says where the
      limit is. */
-  const sizes = [25, 5];
+  const sizes = [40];
   let lastErr = null, used = null;
 
   for (const n of sizes) {
@@ -4391,7 +4391,13 @@ async function btLoadExchanges() {
 
   let html = '';
 
-  if (used !== sizes[0]) {
+  if (btExData.ran_out) {
+    html += '<strong>Showing the ' + (btExData.exchanges || []).length +
+      ' most recent exchanges.</strong>' +
+      '<div style="margin-top:4px;font-size:12px;">The server ran out of time building the rest' +
+      (btExData.total ? ' (' + esc(btExData.total) + ' exchange orders exist)' : '') +
+      '. Some order in the list is very slow to read.</div>';
+  } else if (used !== sizes[0]) {
     html += '<strong>Showing the ' + used + ' most recent exchanges.</strong>' +
       '<div style="margin-top:4px;font-size:12px;">The server could not build a longer list ' +
       'in one request' + (btExData.total ? ' (' + esc(btExData.total) + ' exchange orders exist)' : '') +

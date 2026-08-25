@@ -790,7 +790,16 @@ function btp_get_exchanges( $request ) {
     $out      = array();
     $problems = array();
 
+    /* Whatever is slow about a given order, the request must still answer.
+       PHP is killed at 30 seconds and a killed request returns nothing at all,
+       so stop well short of that and send back however many rows were built.
+       A short list is a working tab; a dead request is not. */
+    $deadline = microtime( true ) + 12.0;
+    $ran_out  = false;
+
     foreach ( $order_ids as $oid ) {
+        if ( microtime( true ) > $deadline ) { $ran_out = true; break; }
+
         $oid = (int) $oid;
         $GLOBALS['btp_ex_current'] = $oid;
 
@@ -847,6 +856,7 @@ function btp_get_exchanges( $request ) {
         'total'      => count( $order_ids ),
         'last_fatal' => $last_fatal ? $last_fatal : null,
         'skipped'    => array_values( array_map( 'intval', (array) get_option('btp_ex_skip') ) ),
+        'ran_out'    => $ran_out,
     ) );
 }
 
