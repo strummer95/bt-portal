@@ -4350,71 +4350,104 @@ function btEscHtml(s) {
 async function btLoadExchanges() {
   const tbody = document.getElementById('btExBody');
   tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#9ca3b8;">Loading...</td></tr>';
-  try {
-    btExData = await btFetch('/exchanges');
-    btRenderExchanges();
 
-    /* Orders the server had to skip. Naming them beats a silently short list —
-       and it is what tells us which order is broken. */
-    const probs = (btExData && btExData.problems) || [];
-    const fatal = btExData && btExData.last_fatal;
-    const bar = document.getElementById('btExProblems');
-    if (bar) {
-      const esc0 = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  /* The full list can be too heavy for the server to build in one go. Try it,
+     and on failure walk the page size down rather than showing nothing — a
+     short list beats an empty screen, and how far it gets says where the
+     limit is. */
+  const sizes = [40, 20, 10, 5, 2];
+  let lastErr = null, used = null;
 
-      /* A fatal recorded on a previous attempt — the load that showed nothing
-         but "critical error". This is where it finally gets to explain itself. */
-      if (fatal) {
-        bar.style.display = '';
-        bar.innerHTML =
-          '<strong>The last attempt to load this tab crashed the server.</strong>' +
-          '<div style="margin-top:5px;font-size:12px;">' + esc0(fatal.message) + '</div>' +
-          '<div style="margin-top:4px;font-size:12px;color:#9ca3b8;">' +
-            esc0(fatal.file) + ' &middot; died on order id ' + esc0(fatal.order_id) +
-            ' after ' + esc0(fatal.done) + ' loaded &middot; peak ' + esc0(fatal.peak_mb) +
-            ' MB of ' + esc0(fatal.limit) + '</div>';
-        return;
-      }
-
-      if (!probs.length) { bar.style.display = 'none'; bar.innerHTML = ''; }
-      else {
-        const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        bar.style.display = '';
-        bar.innerHTML =
-          '<strong>' + probs.length + ' order' + (probs.length === 1 ? '' : 's') +
-          ' could not be read and ' + (probs.length === 1 ? 'is' : 'are') + ' missing below.</strong>' +
-          probs.map(p => '<div style="margin-top:4px;font-size:12px;">#' + esc(p.number) +
-            ' (id ' + esc(p.order_id) + ') — ' + esc(p.error) +
-            ' <span style="color:#9ca3b8;">' + esc(p.where) + '</span></div>').join('');
-      }
+  for (const n of sizes) {
+    try {
+      btExData = await btFetch('/exchanges?limit=' + n);
+      used = n;
+      break;
+    } catch (e) {
+      lastErr = e;
+      btExData = null;
+      tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#9ca3b8;">' +
+        'Too heavy at ' + n + ' — retrying smaller...</td></tr>';
     }
-  } catch(e) {
-    const expired = e.status === 403;
-    const detail  = e.detail ? String(e.detail) : '';
-    const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#b71c1c;">' +
-      (expired
-        ? 'Session expired — reload the page.'
-        : 'Error loading exchanges.' +
-          (detail ? '<div style="margin-top:8px;font-size:12px;color:#7d2018;">' + esc(detail) + '</div>' : '') +
-          '<div style="margin-top:6px;font-size:11px;color:#9ca3b8;">' +
-            esc(e.message || 'no status') + '</div>') +
-      '</td></tr>';
   }
+
+  const bar = document.getElementById('btExProblems');
+  const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  if (!btExData) {
+    // Even one order was too much, or something else entirely is wrong.
+    tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#b71c1c;">' +
+      (lastErr && lastErr.status === 403
+        ? 'Session expired — reload the page.'
+        : 'Exchanges could not be loaded.') + '</td></tr>';
+    await btExShowDiag(bar, esc);
+    return;
+  }
+
+  btRenderExchanges();
+
+  const probs = (btExData.problems) || [];
+  if (!bar) return;
+
+  let html = '';
+
+  if (used !== sizes[0]) {
+    html += '<strong>Showing the ' + used + ' most recent exchanges.</strong>' +
+      '<div style="margin-top:4px;font-size:12px;">The server could not build a longer list ' +
+      'in one request' + (btExData.total ? ' (' + esc(btExData.total) + ' exchange orders exist)' : '') +
+      '.</div>';
+  }
+
+  if (btExData.last_fatal) {
+    const f = btExData.last_fatal;
+    html += (html ? '<div style="margin-top:8px;"></div>' : '') +
+      '<strong>An earlier attempt crashed the server.</strong>' +
+      '<div style="margin-top:4px;font-size:12px;">' + esc(f.message) + '</div>' +
+      '<div style="margin-top:3px;font-size:12px;color:#9ca3b8;">' + esc(f.file) +
+      ' &middot; order id ' + esc(f.order_id) + ' after ' + esc(f.done) +
+      ' loaded &middot; peak ' + esc(f.peak_mb) + ' MB of ' + esc(f.limit) + '</div>';
+  }
+
+  if (probs.length) {
+    html += (html ? '<div style="margin-top:8px;"></div>' : '') +
+      '<strong>' + probs.length + ' order' + (probs.length === 1 ? '' : 's') + ' could not be read.</strong>' +
+      probs.map(p => '<div style="margin-top:4px;font-size:12px;">#' + esc(p.number) +
+        ' (id ' + esc(p.order_id) + ') — ' + esc(p.error) +
+        ' <span style="color:#9ca3b8;">' + esc(p.where) + '</span></div>').join('');
+  }
+
+  bar.style.display = html ? '' : 'none';
+  bar.innerHTML = html;
 }
 
-function btSetExFilter(f) { btExFilter = f; btRenderExchanges(); }
-
-/* Which pile a row belongs in. Hidden wins over everything; a cancelled or
-   refunded order is not work in progress whatever its stored status says, so
-   it never sits in Awaiting waiting on a box that isn't coming. An unpaid
-   order isn't a live exchange yet either — it rejoins the queue on its own
-   the moment Woo says it's paid. */
-function btExBucket(x) {
-  if (x.hidden) return 'hidden';
-  if (x.cancelled) return 'cancelled';
-  if (x.unpaid) return 'unpaid';
-  return x.status;
+/** Ask the server about itself when the list itself refuses to load. */
+async function btExShowDiag(bar, esc) {
+  if (!bar) return;
+  try {
+    const d = await btFetch('/exchanges/diag');
+    let html = '<strong>Server diagnostics</strong><div style="margin-top:5px;font-size:12px;">';
+    html += 'WooCommerce ' + (d.woo_active ? 'active' : '<b>NOT ACTIVE</b>') + ' &middot; ';
+    html += 'exchange orders: ' + esc(d.exchange_orders) + ' &middot; ';
+    html += 'product id ' + esc(d.product_id) + ' &middot; ';
+    html += 'HPOS ' + (d.hpos === null ? 'unknown' : (d.hpos ? 'on' : 'off')) + '<br>';
+    html += 'PHP ' + esc(d.php) + ' &middot; memory limit ' + esc(d.memory_limit) +
+            ' &middot; max exec ' + esc(d.max_exec) + 's &middot; plugin ' + esc(d.plugin);
+    html += '</div>';
+    if (d.last_fatal) {
+      const f = d.last_fatal;
+      html += '<div style="margin-top:8px;"><strong>Last crash</strong>' +
+        '<div style="margin-top:4px;font-size:12px;">' + esc(f.message) + '</div>' +
+        '<div style="margin-top:3px;font-size:12px;color:#9ca3b8;">' + esc(f.file) +
+        ' &middot; order id ' + esc(f.order_id) + ' after ' + esc(f.done) +
+        ' loaded &middot; peak ' + esc(f.peak_mb) + ' MB of ' + esc(f.limit) +
+        ' &middot; ' + esc(f.when) + '</div></div>';
+    }
+    bar.style.display = '';
+    bar.innerHTML = html;
+  } catch (e) {
+    bar.style.display = '';
+    bar.innerHTML = '<strong>Diagnostics unavailable.</strong> ' + esc(e.message || '');
+  }
 }
 
 function btRenderExchanges() {

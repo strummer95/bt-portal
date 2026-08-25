@@ -657,6 +657,15 @@ add_action('rest_api_init', function() {
         'permission_callback' => 'btp_ex_perm',
     ]);
 
+    /* Deliberately loads nothing — no orders, no Woo. It has to answer even
+       when /exchanges is killing the request, because that is exactly when
+       its answer matters. */
+    register_rest_route( $ns, '/exchanges/diag', [
+        'methods'             => 'GET',
+        'callback'            => 'btp_exchanges_diag',
+        'permission_callback' => 'btp_ex_perm',
+    ]);
+
     register_rest_route( $ns, '/exchanges/(?P<order_id>\d+)', [
         'methods'             => 'POST',
         'callback'            => 'btp_update_exchange',
@@ -868,5 +877,42 @@ function btp_update_exchange( $request ) {
     return rest_ensure_response( array_merge(
         array('order_id' => $order_id, 'emailed' => $emailed),
         btp_exchange_row( $order_id )
+    ) );
+}
+
+/**
+ * What the server can say about itself without loading a single order.
+ */
+function btp_exchanges_diag() {
+    global $wpdb;
+
+    $count = null;
+    if ( function_exists('wc_get_order') ) {
+        $pid = btp_exchange_product_id();
+        $count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(DISTINCT oi.order_id)
+               FROM {$wpdb->prefix}woocommerce_order_items oi
+               JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
+                 ON oim.order_item_id = oi.order_item_id
+              WHERE oi.order_item_type = 'line_item'
+                AND oim.meta_key = '_product_id'
+                AND oim.meta_value = %d",
+            $pid
+        ) );
+    }
+
+    return rest_ensure_response( array(
+        'last_fatal'      => get_option('btp_ex_last_fatal') ?: null,
+        'exchange_orders' => $count,
+        'product_id'      => btp_exchange_product_id(),
+        'woo_active'      => function_exists('wc_get_order'),
+        'hpos'            => class_exists('\\Automattic\\WooCommerce\\Utilities\\OrderUtil')
+                             && method_exists('\\Automattic\\WooCommerce\\Utilities\\OrderUtil', 'custom_orders_table_usage_is_enabled')
+                             ? \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled()
+                             : null,
+        'memory_limit'    => ini_get('memory_limit'),
+        'max_exec'        => ini_get('max_execution_time'),
+        'php'             => PHP_VERSION,
+        'plugin'          => defined('BTP_VERSION') ? BTP_VERSION : '',
     ) );
 }
