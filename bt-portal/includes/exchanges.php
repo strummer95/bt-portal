@@ -676,8 +676,23 @@ function btp_get_exchanges( $request ) {
     $seeding = ! get_option('btp_exchanges_seeded_hidden_v1');
     $seed    = $seeding ? btp_exchange_seed_hidden() : array();
 
-    $out = array();
-    foreach ( btp_exchange_order_ids( $limit ) as $oid ) {
+    /* Finding the orders is the other place this can die outright — a Woo
+       upgrade to high-performance order storage moves these tables. Say so
+       plainly instead of returning a bare 500. */
+    try {
+        $order_ids = btp_exchange_order_ids( $limit );
+    } catch ( Throwable $e ) {
+        return new WP_Error(
+            'btp_ex_lookup_failed',
+            'Could not look up exchange orders: ' . $e->getMessage(),
+            ['status' => 500]
+        );
+    }
+
+    $out      = array();
+    $problems = array();
+
+    foreach ( $order_ids as $oid ) {
         $order = wc_get_order( (int) $oid );
         if ( ! $order ) continue;
         if ( in_array( $order->get_status(), array('trash', 'checkout-draft'), true ) ) continue;
@@ -694,7 +709,21 @@ function btp_get_exchanges( $request ) {
             ) );
         }
 
-        $out[] = array_merge( btp_exchange_payload( $order ), btp_exchange_row( $oid ) );
+        /* One malformed order used to take the whole tab down with a 500 —
+           an order whose product was deleted, whose meta went strange, or
+           which a Woo update left half-migrated. The list is far more useful
+           missing one row than missing all of them, so a bad order is skipped
+           and named instead of thrown. */
+        try {
+            $out[] = array_merge( btp_exchange_payload( $order ), btp_exchange_row( $oid ) );
+        } catch ( Throwable $e ) {
+            $problems[] = array(
+                'order_id' => $oid,
+                'number'   => (string) $order->get_order_number(),
+                'error'    => $e->getMessage(),
+                'where'    => basename( $e->getFile() ) . ':' . $e->getLine(),
+            );
+        }
     }
 
     if ( $seeding ) update_option('btp_exchanges_seeded_hidden_v1', '1');
@@ -703,6 +732,7 @@ function btp_get_exchanges( $request ) {
         'product_id' => btp_exchange_product_id(),
         'statuses'   => btp_exchange_statuses(),
         'exchanges'  => $out,
+        'problems'   => $problems,
     ) );
 }
 

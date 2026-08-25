@@ -1312,6 +1312,7 @@ add_shortcode( 'bt_schedule', function() {
       <div class="ex-filters" id="btExFilters"></div>
       <button onclick="btLoadExchanges()" class="ex-filter" style="border-color:#0f1240;color:#0f1240;">Refresh</button>
     </div>
+    <div id="btExProblems" style="display:none;background:#fff4e5;border-left:3px solid #e08a00;color:#7a4a00;padding:11px 14px;border-radius:4px;margin-bottom:14px;font-size:13px;"></div>
     <div style="overflow-x:auto;border-radius:8px;border:1px solid #e8eaf0;">
       <table class="ex-table">
         <thead>
@@ -4352,6 +4353,24 @@ async function btLoadExchanges() {
   try {
     btExData = await btFetch('/exchanges');
     btRenderExchanges();
+
+    /* Orders the server had to skip. Naming them beats a silently short list —
+       and it is what tells us which order is broken. */
+    const probs = (btExData && btExData.problems) || [];
+    const bar = document.getElementById('btExProblems');
+    if (bar) {
+      if (!probs.length) { bar.style.display = 'none'; bar.innerHTML = ''; }
+      else {
+        const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        bar.style.display = '';
+        bar.innerHTML =
+          '<strong>' + probs.length + ' order' + (probs.length === 1 ? '' : 's') +
+          ' could not be read and ' + (probs.length === 1 ? 'is' : 'are') + ' missing below.</strong>' +
+          probs.map(p => '<div style="margin-top:4px;font-size:12px;">#' + esc(p.number) +
+            ' (id ' + esc(p.order_id) + ') — ' + esc(p.error) +
+            ' <span style="color:#9ca3b8;">' + esc(p.where) + '</span></div>').join('');
+      }
+    }
   } catch(e) {
     const expired = e.status === 403;
     const detail  = e.detail ? String(e.detail) : '';
