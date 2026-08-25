@@ -136,6 +136,12 @@ function btp_exchange_order_ids( $limit = 100 ) {
     $limit = max(1, min(300, (int) $limit));
     $pid   = btp_exchange_product_id();
 
+    // Orders that have previously crashed the request, kept out of the query
+    // entirely rather than being tried and killing the page again.
+    $skip = get_option('btp_ex_skip');
+    $skip = is_array($skip) ? array_map('intval', $skip) : array();
+    $not  = $skip ? ' AND oi.order_id NOT IN (' . implode( ',', $skip ) . ') ' : '';
+
     return $wpdb->get_col( $wpdb->prepare(
         "SELECT DISTINCT oi.order_id
            FROM {$wpdb->prefix}woocommerce_order_items oi
@@ -144,6 +150,7 @@ function btp_exchange_order_ids( $limit = 100 ) {
           WHERE oi.order_item_type = 'line_item'
             AND oim.meta_key = '_product_id'
             AND oim.meta_value = %d
+            $not
           ORDER BY oi.order_id DESC
           LIMIT %d",
         $pid, $limit
@@ -660,6 +667,18 @@ add_action('rest_api_init', function() {
     /* Deliberately loads nothing — no orders, no Woo. It has to answer even
        when /exchanges is killing the request, because that is exactly when
        its answer matters. */
+    /* Clears the quarantine list — for after the offending order has been
+       fixed or deleted in WooCommerce. */
+    register_rest_route( $ns, '/exchanges/unskip', [
+        'methods'             => 'POST',
+        'callback'            => function() {
+            delete_option('btp_ex_skip');
+            delete_option('btp_ex_last_fatal');
+            return rest_ensure_response( array( 'ok' => true ) );
+        },
+        'permission_callback' => 'btp_ex_perm',
+    ]);
+
     register_rest_route( $ns, '/exchanges/diag', [
         'methods'             => 'GET',
         'callback'            => 'btp_exchanges_diag',
@@ -686,6 +705,19 @@ function btp_ex_watch_fatal() {
             delete_option('btp_ex_last_fatal');
             return;
         }
+        /* Whatever this order is, loading it kills PHP outright — the kind of
+           fault no try/catch can intercept. Quarantine it so the next request
+           gets past it: one unreadable order must not cost the whole tab. */
+        $bad = isset($GLOBALS['btp_ex_current']) ? (int) $GLOBALS['btp_ex_current'] : 0;
+        if ( $bad ) {
+            $skip = get_option('btp_ex_skip');
+            if ( ! is_array($skip) ) $skip = array();
+            if ( ! in_array( $bad, $skip, true ) ) {
+                $skip[] = $bad;
+                update_option( 'btp_ex_skip', $skip, false );
+            }
+        }
+
         update_option( 'btp_ex_last_fatal', array(
             'message'  => $e['message'],
             'file'     => basename( $e['file'] ) . ':' . $e['line'],
@@ -789,6 +821,7 @@ function btp_get_exchanges( $request ) {
         'limit'      => $limit,
         'total'      => count( $order_ids ),
         'last_fatal' => $last_fatal ? $last_fatal : null,
+        'skipped'    => array_values( array_map( 'intval', (array) get_option('btp_ex_skip') ) ),
     ) );
 }
 
@@ -903,6 +936,7 @@ function btp_exchanges_diag() {
 
     return rest_ensure_response( array(
         'last_fatal'      => get_option('btp_ex_last_fatal') ?: null,
+        'skipped'         => array_values( array_map( 'intval', (array) get_option('btp_ex_skip') ) ),
         'exchange_orders' => $count,
         'product_id'      => btp_exchange_product_id(),
         'woo_active'      => function_exists('wc_get_order'),

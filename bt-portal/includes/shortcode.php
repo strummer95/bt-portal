@@ -4398,6 +4398,20 @@ async function btLoadExchanges() {
       '.</div>';
   }
 
+  const skipped = btExData.skipped || [];
+  if (skipped.length) {
+    html += (html ? '<div style="margin-top:8px;"></div>' : '') +
+      '<strong>' + skipped.length + ' order' + (skipped.length === 1 ? '' : 's') +
+      ' set aside because loading ' + (skipped.length === 1 ? 'it' : 'them') +
+      ' crashes the server:</strong> ' +
+      '<span style="font-family:monospace;">' + skipped.map(esc).join(', ') + '</span>' +
+      '<div style="margin-top:5px;font-size:12px;">Open the order in WooCommerce to see what is wrong with it. ' +
+      'Once it is fixed or deleted, put it back: ' +
+      '<button type="button" onclick="btExUnskip()" style="font-family:\'Barlow Condensed\',sans-serif;' +
+      'font-size:11px;font-weight:700;letter-spacing:.05em;padding:3px 9px;border:1px solid #e08a00;' +
+      'background:#fff;color:#7a4a00;border-radius:3px;cursor:pointer;">TRY THEM AGAIN</button></div>';
+  }
+
   if (btExData.last_fatal) {
     const f = btExData.last_fatal;
     html += (html ? '<div style="margin-top:8px;"></div>' : '') +
@@ -4420,6 +4434,16 @@ async function btLoadExchanges() {
   bar.innerHTML = html;
 }
 
+/** Put quarantined orders back in the queue, after they've been fixed. */
+async function btExUnskip() {
+  try {
+    await btFetch('/exchanges/unskip', 'POST', {});
+    btLoadExchanges();
+  } catch (e) {
+    btToast('Could not clear that. Try again.', 'bad');
+  }
+}
+
 /** Ask the server about itself when the list itself refuses to load. */
 async function btExShowDiag(bar, esc) {
   if (!bar) return;
@@ -4430,6 +4454,9 @@ async function btExShowDiag(bar, esc) {
     html += 'exchange orders: ' + esc(d.exchange_orders) + ' &middot; ';
     html += 'product id ' + esc(d.product_id) + ' &middot; ';
     html += 'HPOS ' + (d.hpos === null ? 'unknown' : (d.hpos ? 'on' : 'off')) + '<br>';
+    if (d.skipped && d.skipped.length) {
+      html += 'set aside: <span style="font-family:monospace;">' + d.skipped.map(esc).join(', ') + '</span><br>';
+    }
     html += 'PHP ' + esc(d.php) + ' &middot; memory limit ' + esc(d.memory_limit) +
             ' &middot; max exec ' + esc(d.max_exec) + 's &middot; plugin ' + esc(d.plugin);
     html += '</div>';
