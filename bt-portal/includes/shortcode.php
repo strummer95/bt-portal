@@ -1846,7 +1846,31 @@ function btSaving(on) {
 async function btFetch(path, method, body) {
   const opts = { method:method||'GET', headers:{'Content-Type':'application/json','X-WP-Nonce':btNonce} };
   if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(btAPI + path, opts);
+
+  /* Without this, a request the server never answers leaves the screen on
+     "Loading..." indefinitely with nothing to show for it. */
+  let timer = null;
+  if (typeof AbortController !== 'undefined') {
+    const ac = new AbortController();
+    opts.signal = ac.signal;
+    timer = setTimeout(() => ac.abort(), 25000);
+  }
+
+  let r;
+  try {
+    r = await fetch(btAPI + path, opts);
+  } catch (netErr) {
+    if (timer) clearTimeout(timer);
+    const err = new Error(
+      netErr && netErr.name === 'AbortError'
+        ? 'The server did not answer within 25 seconds.'
+        : ('Could not reach the server: ' + (netErr && netErr.message ? netErr.message : 'network error'))
+    );
+    err.status = 0;
+    err.detail = err.message;
+    throw err;
+  }
+  if (timer) clearTimeout(timer);
   if (!r.ok) {
     /* WordPress puts a real explanation in the body — "WooCommerce is not
        active", a PHP fatal, an expired nonce. Throwing only the status number
@@ -4384,7 +4408,22 @@ async function btLoadExchanges() {
     return;
   }
 
-  btRenderExchanges();
+  try {
+    btRenderExchanges();
+  } catch (renderErr) {
+    // The data arrived; drawing it is what broke. Say which, rather than
+    // leaving the table sitting on "Loading..." with the reason in a console
+    // nobody has open.
+    tbody.innerHTML = '<tr><td colspan="14" style="padding:40px;text-align:center;color:#b71c1c;">' +
+      'The exchanges loaded but could not be displayed.' +
+      '<div style="margin-top:8px;font-size:12px;">' +
+        String(renderErr && renderErr.message ? renderErr.message : renderErr)
+          .replace(/&/g,'&amp;').replace(/</g,'&lt;') +
+      '</div><div style="margin-top:4px;font-size:11px;color:#9ca3b8;">' +
+        ((btExData.exchanges || []).length) + ' rows received' +
+      '</div></td></tr>';
+    return;
+  }
 
   const probs = (btExData.problems) || [];
   if (!bar) return;
