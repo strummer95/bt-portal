@@ -992,8 +992,8 @@ function btp_exchanges_diag() {
                  ON oim.order_item_id = oi.order_item_id
               WHERE oi.order_item_type = 'line_item'
                 AND oim.meta_key = '_product_id'
-                AND oim.meta_value = %d",
-            $pid
+                AND oim.meta_value = %s",
+            (string) $pid
         ) );
     }
 
