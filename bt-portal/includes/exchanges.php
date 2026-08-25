@@ -142,19 +142,46 @@ function btp_exchange_order_ids( $limit = 100 ) {
     $skip = is_array($skip) ? array_map('intval', $skip) : array();
     $not  = $skip ? ' AND oi.order_id NOT IN (' . implode( ',', $skip ) . ') ' : '';
 
-    return $wpdb->get_col( $wpdb->prepare(
+    /* meta_value is a LONGTEXT column. Comparing it to an unquoted number
+       (meta_value = 4441) makes MySQL cast every row in the table to a number
+       before it can compare, which rules out the meta_key index and turns this
+       into a full scan of a table that grows with every order ever placed.
+       Quoting it — meta_value = '4441' — compares string to string, uses the
+       index, and is the difference between milliseconds and half a minute.
+
+       This is why the failure looked so strange: it had nothing to do with how
+       many orders were requested, because the scan happens before LIMIT is
+       ever applied. It simply got slower every time an order was placed, until
+       it crossed PHP's 30 second execution limit and the request was killed
+       outright. */
+
+    $cache_key = 'btp_ex_ids_' . md5( $pid . '|' . $limit . '|' . implode( ',', $skip ) );
+    $cached    = get_transient( $cache_key );
+    if ( is_array( $cached ) ) return $cached;
+
+    $started = microtime( true );
+
+    $ids = $wpdb->get_col( $wpdb->prepare(
         "SELECT DISTINCT oi.order_id
            FROM {$wpdb->prefix}woocommerce_order_items oi
            JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
              ON oim.order_item_id = oi.order_item_id
           WHERE oi.order_item_type = 'line_item'
             AND oim.meta_key = '_product_id'
-            AND oim.meta_value = %d
+            AND oim.meta_value = %s
             $not
           ORDER BY oi.order_id DESC
           LIMIT %d",
-        $pid, $limit
+        (string) $pid, $limit
     ) );
+
+    update_option( 'btp_ex_query_ms', round( ( microtime( true ) - $started ) * 1000 ), false );
+
+    // Five minutes is long enough to make repeat loads instant and short
+    // enough that a new exchange shows up without anyone clearing anything.
+    set_transient( $cache_key, $ids, 5 * MINUTE_IN_SECONDS );
+
+    return $ids;
 }
 
 /** Tracking row for an order, defaulted when none has been saved yet. */
@@ -857,6 +884,7 @@ function btp_get_exchanges( $request ) {
         'last_fatal' => $last_fatal ? $last_fatal : null,
         'skipped'    => array_values( array_map( 'intval', (array) get_option('btp_ex_skip') ) ),
         'ran_out'    => $ran_out,
+        'query_ms'   => (int) get_option('btp_ex_query_ms'),
     ) );
 }
 

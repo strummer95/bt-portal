@@ -50,6 +50,11 @@ function btp_ex_diag_page() {
               <td><?php echo esc_html(btp_exchange_product_id()); ?></td></tr>
           <tr><td><strong>Plugin version</strong></td>
               <td><?php echo esc_html(defined('BTP_VERSION') ? BTP_VERSION : '?'); ?></td></tr>
+          <tr><td><strong>Last order-lookup query time</strong></td>
+              <td><?php
+                $ms = (int) get_option('btp_ex_query_ms');
+                echo $ms ? esc_html(number_format($ms)) . ' ms' : 'not measured yet';
+              ?></td></tr>
           <tr><td><strong>Orders currently set aside</strong></td>
               <td><?php
                 $skip = (array) get_option('btp_ex_skip');
@@ -123,10 +128,10 @@ function btp_ex_diag_run() {
              ON oim.order_item_id = oi.order_item_id
           WHERE oi.order_item_type = 'line_item'
             AND oim.meta_key = '_product_id'
-            AND oim.meta_value = %d
+            AND oim.meta_value = %s
           ORDER BY oi.order_id DESC
           LIMIT 200",
-        $pid
+        (string) $pid
     ));
 
     printf('<h2>%d exchange orders found</h2>', count($ids));
@@ -206,10 +211,10 @@ function btp_ex_diag_sizes() {
              ON oim.order_item_id = oi.order_item_id
           WHERE oi.order_item_type = 'line_item'
             AND oim.meta_key = '_product_id'
-            AND oim.meta_value = %d
+            AND oim.meta_value = %s
           ORDER BY oi.order_id DESC
           LIMIT 40",
-        $pid
+        (string) $pid
     ) );
 
     if ( ! $ids ) { echo '<p>No exchange orders found.</p>'; return; }
