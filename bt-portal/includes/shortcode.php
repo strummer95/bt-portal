@@ -4522,6 +4522,19 @@ async function btExShowDiag(bar, esc) {
   }
 }
 
+/* Restored: both of these were removed by accident when btLoadExchanges was
+   rewritten. btExBucket decides which filter tab a row belongs to and is
+   called five times inside btRenderExchanges, so losing it meant the data
+   loaded and then the table threw while drawing. */
+function btExBucket(x) {
+  if (x.hidden) return 'hidden';
+  if (x.cancelled) return 'cancelled';
+  if (x.unpaid) return 'unpaid';
+  return x.status;
+}
+
+function btSetExFilter(f) { btExFilter = f; btRenderExchanges(); }
+
 function btRenderExchanges() {
   const statuses = btExData.statuses || {};
   const all = btExData.exchanges || [];
