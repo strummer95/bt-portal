@@ -196,10 +196,28 @@ function btp_exchange_row( $order_id ) {
  *
  * Customer and Ship to are dropped — the table already has both columns.
  */
+/**
+ * Parses the run-on customer note the exchange form used to write.
+ *
+ * Every pattern here is bounded, and deliberately so. The earlier versions used
+ * unbounded lazy groups — (.+?) followed by another (.*?) — which are fine on a
+ * two-line note and catastrophic on a long one: the regex engine retries an
+ * exponential number of splits and the request runs until PHP's 30 second
+ * execution limit kills it outright. That is not an error any code can catch;
+ * the process simply stops, which is why this surfaced as a bare "critical
+ * error" with nothing in the response.
+ */
 function btp_parse_exchange_note( $note ) {
     $note = trim( (string) $note );
     $out  = array( 'original_order' => '', 'store' => '', 'items' => array(), 'raw' => $note, 'parsed' => false );
     if ( $note === '' ) return $out;
+
+    /* A genuine exchange request is a few hundred characters. Anything past
+       this is a paste accident or a form loop, and no useful field lives out
+       there — but it is exactly what makes the patterns below expensive. */
+    if ( strlen( $note ) > 8000 ) {
+        $note = substr( $note, 0, 8000 );
+    }
 
     if ( preg_match( '/Original Order\s*#?\s*:\s*([^\s]+)/i', $note, $m ) ) {
         $out['original_order'] = trim( $m[1], " \t,." );
@@ -208,7 +226,7 @@ function btp_parse_exchange_note( $note ) {
     // School/Team, however the form ends up labelling it. Stops at the next
     // known label so the rest of the sentence doesn't get swallowed.
     if ( preg_match(
-        '/(?:School\s*\/\s*Team|School or Team|School|Team|Store|Organization)\s*:\s*(.+?)\s*(?=Customer\s*:|Ship\s*to\s*:|Original Order|Item\s*\d+\s*:|$)/is',
+        '/(?:School\s*\/\s*Team|School or Team|School|Team|Store|Organization)\s*:\s*(.{0,200}?)\s*(?=Customer\s*:|Ship\s*to\s*:|Original Order|Item\s*\d+\s*:|$)/is',
         $note, $m
     ) ) {
         $out['store'] = trim( $m[1], " \t,.-" );
@@ -219,8 +237,15 @@ function btp_parse_exchange_note( $note ) {
        (written with a multiplication sign and an em dash). Only used when the
        structured meta is missing, e.g. an order placed through a checkout that
        never ran the form's hooks. */
-    if ( preg_match_all( '/^\s*(\d+)\s*[x\x{00d7}]\s*(.+?),\s*(.*?)\s*[\x{2014}\x{2013}-]\s*(\S+)\s+to\s+(\S+)\s*$/imu', $note, $lines, PREG_SET_ORDER ) ) {
-        foreach ( $lines as $l ) {
+    /* Split first and match per line. The name is [^,] rather than (.+?), which
+       removes the backtracking entirely: there is only one way to reach the
+       comma, so the engine cannot try thousands of them. */
+    foreach ( preg_split( '/\r\n|\r|\n/', $note, 400 ) as $line ) {
+        if ( strlen( $line ) > 400 ) continue;   // not an item line
+        if ( preg_match(
+            '/^\s*(\d+)\s*[x\x{00d7}]\s*([^,]{1,200}),\s*([^\x{2014}\x{2013}-]{0,120})\s*[\x{2014}\x{2013}-]\s*(\S+)\s+to\s+(\S+)\s*$/iu',
+            $line, $l
+        ) ) {
             $out['items'][] = array(
                 'name'  => trim($l[2]),
                 'size'  => trim($l[4]),
@@ -232,17 +257,17 @@ function btp_parse_exchange_note( $note ) {
     }
 
     // Older wording: split on "Item N:" so multi-item requests separate.
-    if ( empty( $out['items'] ) && preg_match_all( '/Item\s*\d+\s*:\s*(.*?)(?=Item\s*\d+\s*:|$)/is', $note, $chunks ) ) {
+    if ( empty( $out['items'] ) && preg_match_all( '/Item\s*\d+\s*:\s*(.{0,1000}?)(?=Item\s*\d+\s*:|$)/is', $note, $chunks ) ) {
         foreach ( $chunks[1] as $chunk ) {
             $chunk = trim( $chunk );
             if ( $chunk === '' ) continue;
 
             $ordered = '';
             $wants   = '';
-            if ( preg_match( '/Ordered\s*:\s*(.*?)\s*Wants\s*:\s*(.*)$/is', $chunk, $mm ) ) {
+            if ( preg_match( '/Ordered\s*:\s*(.{0,400}?)\s*Wants\s*:\s*(.{0,400})$/is', $chunk, $mm ) ) {
                 $ordered = trim( $mm[1] );
                 $wants   = trim( $mm[2] );
-            } elseif ( preg_match( '/Ordered\s*:\s*(.*)$/is', $chunk, $mm ) ) {
+            } elseif ( preg_match( '/Ordered\s*:\s*(.{0,400})$/is', $chunk, $mm ) ) {
                 $ordered = trim( $mm[1] );
             } else {
                 $ordered = $chunk;

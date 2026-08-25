@@ -73,8 +73,11 @@ function btp_ex_diag_page() {
       <?php endif; ?>
 
       <p>
-        <a href="<?php echo esc_url(add_query_arg('run', '1')); ?>" class="button button-primary">
-          Run the order-by-order test
+        <a href="<?php echo esc_url(add_query_arg('sizes', '1')); ?>" class="button button-primary">
+          Measure the orders (fast, safe)
+        </a>
+        <a href="<?php echo esc_url(add_query_arg('run', '1')); ?>" class="button">
+          Run the order-by-order build test
         </a>
         <a href="<?php echo esc_url(add_query_arg('clear', '1')); ?>" class="button">
           Clear set-aside list
@@ -94,6 +97,7 @@ function btp_ex_diag_page() {
           echo '<div class="notice notice-success inline"><p>Cleared.</p></div>';
       }
 
+      if (isset($_GET['sizes'])) btp_ex_diag_sizes();
       if ($run) btp_ex_diag_run();
       ?>
     </div>
@@ -181,4 +185,96 @@ function btp_ex_diag_run() {
     );
     echo '<p>If this finished but the portal tab still fails, the fault is not in building the rows '
        . '&mdash; it is in sending them, which points at the response size rather than any one order.</p>';
+}
+
+/**
+ * Counts only — no WooCommerce objects, no row building, so it cannot hang.
+ *
+ * The build test tells you WHERE it dies. This tells you WHY: an order with
+ * thousands of line items or meta rows is expensive to assemble in a way that
+ * has nothing to do with how many orders you ask for, which matches the
+ * symptom exactly (dying just as readily at five orders as at forty).
+ */
+function btp_ex_diag_sizes() {
+    global $wpdb;
+
+    $pid = btp_exchange_product_id();
+    $ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT DISTINCT oi.order_id
+           FROM {$wpdb->prefix}woocommerce_order_items oi
+           JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
+             ON oim.order_item_id = oi.order_item_id
+          WHERE oi.order_item_type = 'line_item'
+            AND oim.meta_key = '_product_id'
+            AND oim.meta_value = %d
+          ORDER BY oi.order_id DESC
+          LIMIT 40",
+        $pid
+    ) );
+
+    if ( ! $ids ) { echo '<p>No exchange orders found.</p>'; return; }
+
+    $in = implode( ',', array_map( 'intval', $ids ) );
+
+    $items = $wpdb->get_results(
+        "SELECT order_id, COUNT(*) AS n
+           FROM {$wpdb->prefix}woocommerce_order_items
+          WHERE order_id IN ($in)
+          GROUP BY order_id", OBJECT_K );
+
+    $imeta = $wpdb->get_results(
+        "SELECT oi.order_id AS order_id, COUNT(*) AS n
+           FROM {$wpdb->prefix}woocommerce_order_items oi
+           JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
+             ON oim.order_item_id = oi.order_item_id
+          WHERE oi.order_id IN ($in)
+          GROUP BY oi.order_id", OBJECT_K );
+
+    // Order meta lives in postmeta on classic storage, or the HPOS meta table.
+    $ometa = array();
+    $hpos  = $wpdb->get_var( "SHOW TABLES LIKE '{$wpdb->prefix}wc_orders_meta'" );
+    if ( $hpos ) {
+        $ometa = $wpdb->get_results(
+            "SELECT order_id, COUNT(*) AS n FROM {$wpdb->prefix}wc_orders_meta
+              WHERE order_id IN ($in) GROUP BY order_id", OBJECT_K );
+    } else {
+        $ometa = $wpdb->get_results(
+            "SELECT post_id AS order_id, COUNT(*) AS n FROM {$wpdb->postmeta}
+              WHERE post_id IN ($in) GROUP BY post_id", OBJECT_K );
+    }
+
+    $notes = array();
+    if ( $hpos ) {
+        $rows = $wpdb->get_results( "SELECT id AS order_id, LENGTH(customer_note) AS n
+                                       FROM {$wpdb->prefix}wc_orders WHERE id IN ($in)", OBJECT_K );
+    } else {
+        $rows = $wpdb->get_results( "SELECT ID AS order_id, LENGTH(post_excerpt) AS n
+                                       FROM {$wpdb->posts} WHERE ID IN ($in)", OBJECT_K );
+    }
+    $notes = $rows ?: array();
+
+    echo '<h2>Order sizes &mdash; newest 40</h2>';
+    echo '<p class="description">Look for the row that is wildly bigger than the others. '
+       . 'That is the one taking 30 seconds to assemble.</p>';
+    echo '<table class="widefat striped" style="max-width:760px;"><thead><tr>'
+       . '<th>Order id</th><th>Line items</th><th>Item meta rows</th>'
+       . '<th>Order meta rows</th><th>Note length</th></tr></thead><tbody>';
+
+    foreach ( $ids as $oid ) {
+        $oid = (int) $oid;
+        $li  = isset($items[$oid]) ? (int) $items[$oid]->n : 0;
+        $im  = isset($imeta[$oid]) ? (int) $imeta[$oid]->n : 0;
+        $om  = isset($ometa[$oid]) ? (int) $ometa[$oid]->n : 0;
+        $nl  = isset($notes[$oid]) ? (int) $notes[$oid]->n : 0;
+
+        $hot = ( $li > 100 || $im > 500 || $om > 300 || $nl > 20000 );
+
+        printf(
+            '<tr%s><td><strong>%d</strong></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>',
+            $hot ? ' style="background:#fdecea;font-weight:600;"' : '',
+            $oid,
+            number_format($li), number_format($im), number_format($om), number_format($nl)
+        );
+    }
+    echo '</tbody></table>';
 }
