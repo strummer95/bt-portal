@@ -4357,8 +4357,25 @@ async function btLoadExchanges() {
     /* Orders the server had to skip. Naming them beats a silently short list —
        and it is what tells us which order is broken. */
     const probs = (btExData && btExData.problems) || [];
+    const fatal = btExData && btExData.last_fatal;
     const bar = document.getElementById('btExProblems');
     if (bar) {
+      const esc0 = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+      /* A fatal recorded on a previous attempt — the load that showed nothing
+         but "critical error". This is where it finally gets to explain itself. */
+      if (fatal) {
+        bar.style.display = '';
+        bar.innerHTML =
+          '<strong>The last attempt to load this tab crashed the server.</strong>' +
+          '<div style="margin-top:5px;font-size:12px;">' + esc0(fatal.message) + '</div>' +
+          '<div style="margin-top:4px;font-size:12px;color:#9ca3b8;">' +
+            esc0(fatal.file) + ' &middot; died on order id ' + esc0(fatal.order_id) +
+            ' after ' + esc0(fatal.done) + ' loaded &middot; peak ' + esc0(fatal.peak_mb) +
+            ' MB of ' + esc0(fatal.limit) + '</div>';
+        return;
+      }
+
       if (!probs.length) { bar.style.display = 'none'; bar.innerHTML = ''; }
       else {
         const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

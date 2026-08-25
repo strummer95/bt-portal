@@ -664,13 +664,45 @@ add_action('rest_api_init', function() {
     ]);
 });
 
+/**
+ * Fatals that try/catch cannot see — memory exhaustion and execution timeouts —
+ * used to surface as nothing but WordPress's "critical error" page. This
+ * records which order was in hand when PHP died, and how much memory it had
+ * taken, so the next load can say what happened instead of guessing.
+ */
+function btp_ex_watch_fatal() {
+    register_shutdown_function( function() {
+        $e = error_get_last();
+        if ( ! $e || ! in_array( $e['type'], array( E_ERROR, E_PARSE, E_COMPILE_ERROR, E_CORE_ERROR ), true ) ) {
+            delete_option('btp_ex_last_fatal');
+            return;
+        }
+        update_option( 'btp_ex_last_fatal', array(
+            'message'  => $e['message'],
+            'file'     => basename( $e['file'] ) . ':' . $e['line'],
+            'order_id' => isset($GLOBALS['btp_ex_current']) ? $GLOBALS['btp_ex_current'] : 0,
+            'done'     => isset($GLOBALS['btp_ex_done']) ? $GLOBALS['btp_ex_done'] : 0,
+            'peak_mb'  => round( memory_get_peak_usage(true) / 1048576, 1 ),
+            'limit'    => ini_get('memory_limit'),
+            'when'     => current_time('mysql'),
+        ), false );
+    } );
+}
+
 function btp_get_exchanges( $request ) {
     if ( ! function_exists('wc_get_order') ) {
         return new WP_Error('btp_no_woo', 'WooCommerce is not active on this site.', ['status' => 400]);
     }
 
+    btp_ex_watch_fatal();
+    $GLOBALS['btp_ex_current'] = 0;
+    $GLOBALS['btp_ex_done']    = 0;
+
+    /* Was 100. Each WooCommerce order pulls its items, item meta, order meta
+       and addresses into memory, and a hundred of them at once is what tips a
+       modest PHP memory limit over into a fatal that no try/catch can catch. */
     $limit = (int) $request->get_param('limit');
-    if ( $limit <= 0 ) $limit = 100;
+    if ( $limit <= 0 ) $limit = 40;
 
     global $wpdb;
     $seeding = ! get_option('btp_exchanges_seeded_hidden_v1');
@@ -693,11 +725,12 @@ function btp_get_exchanges( $request ) {
     $problems = array();
 
     foreach ( $order_ids as $oid ) {
-        $order = wc_get_order( (int) $oid );
+        $oid = (int) $oid;
+        $GLOBALS['btp_ex_current'] = $oid;
+
+        $order = wc_get_order( $oid );
         if ( ! $order ) continue;
         if ( in_array( $order->get_status(), array('trash', 'checkout-draft'), true ) ) continue;
-
-        $oid = (int) $oid;
 
         if ( $seeding && ( in_array( (string) $order->get_order_number(), $seed, true )
                         || in_array( (string) $oid, $seed, true ) ) ) {
@@ -724,15 +757,29 @@ function btp_get_exchanges( $request ) {
                 'where'    => basename( $e->getFile() ) . ':' . $e->getLine(),
             );
         }
+
+        $GLOBALS['btp_ex_done']++;
+
+        /* Woo caches every order it hands out. Over a long list that cache is
+           the thing that runs the request out of memory, so let it go. */
+        if ( function_exists('wp_cache_flush_group') ) {
+            // no-op on most installs, but cheap where it exists
+        }
+        unset( $order );
     }
 
     if ( $seeding ) update_option('btp_exchanges_seeded_hidden_v1', '1');
+
+    $last_fatal = get_option('btp_ex_last_fatal');
 
     return rest_ensure_response( array(
         'product_id' => btp_exchange_product_id(),
         'statuses'   => btp_exchange_statuses(),
         'exchanges'  => $out,
         'problems'   => $problems,
+        'limit'      => $limit,
+        'total'      => count( $order_ids ),
+        'last_fatal' => $last_fatal ? $last_fatal : null,
     ) );
 }
 
