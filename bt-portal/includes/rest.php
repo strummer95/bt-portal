@@ -169,6 +169,7 @@ function btp_create_store( $request ) {
     $p = $request->get_json_params();
     $result = $wpdb->insert($table,[
         'name'           => sanitize_text_field($p['name']??''),
+        'store_code'     => sanitize_text_field($p['store_code']??''),
         'open_date'      => sanitize_text_field($p['open_date']??'') ?: null,
         'close_date'     => sanitize_text_field($p['close_date']??'') ?: null,
         'fulfillment'    => sanitize_text_field($p['fulfillment']??''),
@@ -190,6 +191,7 @@ function btp_update_store( $request ) {
     $p = $request->get_json_params();
     $wpdb->update($table,[
         'name'           => sanitize_text_field($p['name']??''),
+        'store_code'     => sanitize_text_field($p['store_code']??''),
         'open_date'      => sanitize_text_field($p['open_date']??'') ?: null,
         'close_date'     => sanitize_text_field($p['close_date']??'') ?: null,
         'fulfillment'    => sanitize_text_field($p['fulfillment']??''),

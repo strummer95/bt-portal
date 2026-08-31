@@ -65,6 +65,7 @@ add_action( 'init', function() {
     $sql_stores = "CREATE TABLE IF NOT EXISTS $stores_table (
         id bigint(20) NOT NULL AUTO_INCREMENT,
         name varchar(255) NOT NULL DEFAULT '',
+        store_code varchar(64) NOT NULL DEFAULT '',
         open_date date,
         close_date date,
         fulfillment varchar(100) NOT NULL DEFAULT '',
@@ -205,6 +206,17 @@ add_action( 'init', function() {
     if ( ! in_array('delivery_dates', $cols) )
         $wpdb->query("ALTER TABLE $table ADD COLUMN delivery_dates text DEFAULT NULL");
     update_option( 'bt_schedule_db_migrated_v5', '1' );
+});
+
+// ── MIGRATION: add store_code column to bt_stores ────────────────────────
+add_action( 'init', function() {
+    if ( get_option( 'bt_schedule_db_migrated_v6' ) ) return;
+    global $wpdb;
+    $table = $wpdb->prefix . 'bt_stores';
+    $cols  = $wpdb->get_col("SHOW COLUMNS FROM $table", 0);
+    if ( ! in_array('store_code', $cols) )
+        $wpdb->query("ALTER TABLE $table ADD COLUMN store_code varchar(64) NOT NULL DEFAULT '' AFTER name");
+    update_option( 'bt_schedule_db_migrated_v6', '1' );
 });
 
 // ── MIGRATION: create bt_day_notes table (shared day-header notes) ───────

@@ -970,6 +970,13 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .store-copy-btn:hover { border-color:var(--navy); color:var(--navy); background:#f4f6fb; }
 #bt-schedule-app .store-copy-btn.copied { border-color:#2e7d32; color:#2e7d32; background:#e8f5e9; }
 
+/* ── STORE CODE ── */
+#bt-schedule-app .store-code { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; letter-spacing:.04em; color:var(--navy); text-decoration:none; border-bottom:1.5px solid rgba(26,31,94,.28); transition:all .15s; word-break:break-all; }
+#bt-schedule-app a.store-code:hover { border-bottom-color:var(--navy); color:#e0218a; }
+#bt-schedule-app .store-code.derived { color:var(--gray-400); border-bottom-style:dotted; }
+#bt-schedule-app .store-code.nolink { color:var(--gray-400); border-bottom:none; }
+#bt-schedule-app .store-code-cell { max-width:190px; }
+
 /* ── STORES CATEGORY HEADERS ── */
 #bt-schedule-app .stores-cat-hdr { background:var(--navy-dark); cursor:pointer; user-select:none; }
 #bt-schedule-app .stores-cat-hdr td { padding:7px 10px; border-bottom:2px solid var(--navy); border-top:3px solid var(--gray-200); }
@@ -1252,7 +1259,7 @@ add_shortcode( 'bt_schedule', function() {
     </div>
     <table class="stores-table">
       <thead><tr>
-        <th>Store / School / Org</th><th>Open Date</th><th>Close Date</th>
+        <th>Store / School / Org</th><th>Store Code</th><th>Open Date</th><th>Close Date</th>
         <th>Status</th><th>Fulfillment</th><th>Contact</th><th>Notes</th><th>Link</th>
       </tr></thead>
       <tbody id="btStoresBody"></tbody>
@@ -1504,6 +1511,9 @@ add_shortcode( 'bt_schedule', function() {
     </div>
     <div class="btp-modal-body">
       <div class="bt-form-group"><label>Store / School / Org Name</label><input type="text" id="btSfName" placeholder="e.g. Kaneland Eagles Spring 2025"></div>
+      <div class="bt-form-group"><label>Store Code</label><input type="text" id="btSfCode" placeholder="e.g. kanelandeagles" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <span style="font-size:11px;color:#9ca3b8;margin-top:4px;">The store's slug on OMG or Chipply. Leave it blank and it is read from the store URL below.</span>
+      </div>
       <div class="bt-form-row" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;">
         <div class="bt-form-group"><label>Open Date</label><input type="date" id="btSfOpen"></div>
         <div class="bt-form-group">
@@ -1543,7 +1553,7 @@ add_shortcode( 'bt_schedule', function() {
           <option value="Closed">Closed</option>
         </select>
       </div>
-      <div class="bt-form-group" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;"><label>Store URL / Link</label><input type="text" id="btSfLink" placeholder="https://..."></div>
+      <div class="bt-form-group" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;"><label>Store URL / Link</label><input type="text" id="btSfLink" placeholder="https://..." oninput="btAutofillStoreCode(this)"></div>
       <div class="bt-form-row">
         <div class="bt-form-group"><label>Contact Name</label><input type="text" id="btSfContactName" placeholder="e.g. Jane Smith"></div>
         <div class="bt-form-group"><label>Contact Email</label><input type="email" id="btSfContactEmail" placeholder="e.g. jane@school.org"></div>
@@ -1917,7 +1927,7 @@ function btNormalizeJob(j) {
 }
 
 function btNormalizeStore(s) {
-  return { id:s.id, name:s.name||'', openDate:s.open_date||s.openDate||'', closeDate:s.close_date||s.closeDate||'', fulfillment:s.fulfillment||'', status:s.status||'Upcoming', link:s.link||'', contactName:s.contact_name||s.contactName||'', contactEmail:s.contact_email||s.contactEmail||'', notes:s.notes||'', categoryId: s.category_id ? parseInt(s.category_id) : null, sortOrder: parseInt(s.sort_order)||0, deliveryDates: s.delivery_dates||s.deliveryDates||'[]' };
+  return { id:s.id, name:s.name||'', storeCode:s.store_code||s.storeCode||'', openDate:s.open_date||s.openDate||'', closeDate:s.close_date||s.closeDate||'', fulfillment:s.fulfillment||'', status:s.status||'Upcoming', link:s.link||'', contactName:s.contact_name||s.contactName||'', contactEmail:s.contact_email||s.contactEmail||'', notes:s.notes||'', categoryId: s.category_id ? parseInt(s.category_id) : null, sortOrder: parseInt(s.sort_order)||0, deliveryDates: s.delivery_dates||s.deliveryDates||'[]' };
 }
 
 async function btLoadJobs() {
@@ -2194,7 +2204,7 @@ async function btLoadAndRenderStores() {
        which is a horrible thing to show someone. Say it failed instead. */
     const tbody = document.getElementById('btStoresBody');
     if (tbody && !btStores.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="padding:40px;text-align:center;color:#b71c1c;">' +
+      tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:#b71c1c;">' +
         'Could not load stores &mdash; nothing has been lost. Refresh to try again.</td></tr>';
     }
     console.error('BT stores load failed:', e);
@@ -2246,6 +2256,64 @@ function btCopyStoreLink(ev, btn) {
   }
 }
 
+/* ── STORE CODES ──────────────────────────────────────────────────────────
+   A store's code is its slug on whichever platform the store lives on:
+
+     OrderMyGear   https://<code>.itemorder.com/shop/home/
+     Chipply       https://<dealer>.chipply.com/<code>
+     Redirect      https://boomerts.com/stores/<code>
+
+   Nothing has to be typed in for existing stores. If a code hasn't been
+   saved, it is read back out of the store's Link, which is already there on
+   every store we've built. A derived code shows dotted and grey; a code
+   typed into the store form shows solid and wins over the derived one.
+
+   The code cell links to the store's Link. It never invents a URL from a
+   code alone — the same slug is a different address on each platform, and a
+   link that goes to the wrong store is worse than no link at all. */
+function btParseStoreCode(url) {
+  if (!url) return '';
+  var raw = String(url).trim();
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+  var u; try { u = new URL(raw); } catch(e) { return ''; }
+  var host = u.hostname.toLowerCase().replace(/^www\./, '');
+  var segs = u.pathname.split('/').filter(Boolean);
+  if (/\.itemorder\.com$/.test(host))   return host.replace(/\.itemorder\.com$/, '');
+  if (/\.ordermygear\.com$/.test(host)) return segs[0] || '';
+  if (/\.chipply\.com$/.test(host))     return segs[0] || host.replace(/\.chipply\.com$/, '');
+  if (segs[0] === 'stores' && segs[1])   return segs[1];
+  if (segs.length)                       return segs[segs.length - 1];
+  return host.split('.')[0] || '';
+}
+
+function btStorePlatform(url) {
+  if (!url) return '';
+  var h = String(url).toLowerCase();
+  if (h.indexOf('itemorder.com') > -1 || h.indexOf('ordermygear.com') > -1) return 'OrderMyGear';
+  if (h.indexOf('chipply.com') > -1) return 'Chipply';
+  return '';
+}
+
+function btStoreCodeCell(store) {
+  var saved   = (store.storeCode || '').trim();
+  var code    = saved || btParseStoreCode(store.link);
+  if (!code) return '<span style="color:#c8cdda;">&mdash;</span>';
+  var cls     = 'store-code' + (saved ? '' : ' derived');
+  var plat    = btStorePlatform(store.link);
+  if (store.link) {
+    var tip = 'Open ' + (plat ? plat + ' store' : 'store') + (saved ? '' : ' \u2014 code read from the store link');
+    return '<a href="' + btAttr(store.link) + '" class="' + cls + '" target="_blank" rel="noopener" '
+         + 'title="' + btAttr(tip) + '" onclick="event.stopPropagation()">' + escHtmlBt(code) + '</a>';
+  }
+  return '<span class="store-code nolink" title="No store link saved yet \u2014 add one to make this clickable">' + escHtmlBt(code) + '</span>';
+}
+
+function escHtmlBt(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
 function btRenderStores() {
   const tbody = document.getElementById('btStoresBody');
   const cards = document.getElementById('btStoresCards');
@@ -2276,7 +2344,7 @@ function btRenderStores() {
     const hdrTr = document.createElement('tr');
     hdrTr.className = 'stores-cat-hdr';
     hdrTr.dataset.catId = group.id ?? 'null';
-    hdrTr.innerHTML = `<td colspan="8">
+    hdrTr.innerHTML = `<td colspan="9">
       <span class="stores-cat-label">
         <span class="stores-cat-chevron${isCollapsed?' collapsed':''}">&#9660;</span>
         ${isUncategorized
@@ -2362,6 +2430,7 @@ function btRenderStores() {
       tr.style.cursor = 'pointer';
       tr.innerHTML = `
         <td><span class="store-drag-handle" title="Drag to reorder">&#8942;&#8942;</span><strong>${store.name}</strong></td>
+        <td class="store-code-cell">${btStoreCodeCell(store)}</td>
         <td>${fmtDate(store.openDate)}</td><td>${fmtDate(store.closeDate,'N/A')}</td>
         <td><span class="store-status-badge ${sCls}">${store.status}</span></td>
         <td><span class="store-status-badge" style="${fStyle}">${store.fulfillment||'—'}</span></td>
@@ -2414,6 +2483,7 @@ function btRenderStores() {
         card.addEventListener('click', () => btOpenStoreModal(store.id));
         card.innerHTML = `
           <div class="store-card-name">${store.name}</div>
+          <div class="store-card-row"><span class="store-card-label">Code</span><span class="store-card-value">${btStoreCodeCell(store)}</span></div>
           <div class="store-card-row">
             <span class="store-status-badge ${sCls}">${store.status}</span>
             <span class="store-status-badge" style="${fStyle}">${store.fulfillment||'—'}</span>
@@ -3047,6 +3117,7 @@ function btOpenStoreModal(storeId) {
   if (storeId) {
     const s = btStores.find(x => x.id == storeId);
     document.getElementById('btSfName').value   = s.name;
+    document.getElementById('btSfCode').value   = s.storeCode || '';
     document.getElementById('btSfOpen').value   = s.openDate && s.openDate !== '0000-00-00' ? s.openDate : '';
     const hasClose = s.closeDate && s.closeDate !== '0000-00-00';
     closeInput.value = hasClose ? s.closeDate : '';
@@ -3062,6 +3133,7 @@ function btOpenStoreModal(storeId) {
     btSetDeliveryDates(s.deliveryDates);
   } else {
     document.getElementById('btSfName').value   = '';
+    document.getElementById('btSfCode').value   = '';
     document.getElementById('btSfOpen').value   = '';
     closeInput.value = '';
     noCloseCb.checked = false;
@@ -3124,9 +3196,19 @@ function btGetDeliveryDates() {
   );
 }
 
+/* Typing or pasting a store URL fills in an empty Store Code from it. It
+   never overwrites a code that has been typed by hand. */
+function btAutofillStoreCode(linkInput) {
+  var codeInput = document.getElementById('btSfCode');
+  if (!codeInput || codeInput.value.trim()) return;
+  var derived = btParseStoreCode(linkInput.value);
+  if (derived) codeInput.value = derived;
+}
+
 async function btSaveStore() {
   const payload = {
     name:        document.getElementById('btSfName').value.trim(),
+    store_code:  document.getElementById('btSfCode').value.trim(),
     open_date:   document.getElementById('btSfOpen').value,
     close_date:  document.getElementById('btSfNoCloseDate').checked ? '' : document.getElementById('btSfClose').value,
     fulfillment: document.getElementById('btSfFulfillment').value,
