@@ -973,7 +973,6 @@ add_shortcode( 'bt_schedule', function() {
 /* ── STORE CODE ── */
 #bt-schedule-app .store-code { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; letter-spacing:.04em; color:var(--navy); text-decoration:none; border-bottom:1.5px solid rgba(26,31,94,.28); transition:all .15s; word-break:break-all; }
 #bt-schedule-app a.store-code:hover { border-bottom-color:var(--navy); color:#e0218a; }
-#bt-schedule-app .store-code.derived { color:var(--gray-400); border-bottom-style:dotted; }
 #bt-schedule-app .store-code.nolink { color:var(--gray-400); border-bottom:none; }
 #bt-schedule-app .store-code-cell { max-width:190px; }
 
@@ -1512,7 +1511,7 @@ add_shortcode( 'bt_schedule', function() {
     <div class="btp-modal-body">
       <div class="bt-form-group"><label>Store / School / Org Name</label><input type="text" id="btSfName" placeholder="e.g. Kaneland Eagles Spring 2025"></div>
       <div class="bt-form-group"><label>Store Code</label><input type="text" id="btSfCode" placeholder="e.g. kanelandeagles" autocapitalize="off" autocorrect="off" spellcheck="false">
-        <span style="font-size:11px;color:#9ca3b8;margin-top:4px;">The store's slug on OMG or Chipply. Leave it blank and it is read from the store URL below.</span>
+        <span style="font-size:11px;color:#9ca3b8;margin-top:4px;">The store's slug on OMG or Chipply.</span>
       </div>
       <div class="bt-form-row" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;">
         <div class="bt-form-group"><label>Open Date</label><input type="date" id="btSfOpen"></div>
@@ -1553,7 +1552,7 @@ add_shortcode( 'bt_schedule', function() {
           <option value="Closed">Closed</option>
         </select>
       </div>
-      <div class="bt-form-group" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;"><label>Store URL / Link</label><input type="text" id="btSfLink" placeholder="https://..." oninput="btAutofillStoreCode(this)"></div>
+      <div class="bt-form-group" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;"><label>Store URL / Link</label><input type="text" id="btSfLink" placeholder="https://..."></div>
       <div class="bt-form-row">
         <div class="bt-form-group"><label>Contact Name</label><input type="text" id="btSfContactName" placeholder="e.g. Jane Smith"></div>
         <div class="bt-form-group"><label>Contact Email</label><input type="email" id="btSfContactEmail" placeholder="e.g. jane@school.org"></div>
@@ -2257,35 +2256,9 @@ function btCopyStoreLink(ev, btn) {
 }
 
 /* ── STORE CODES ──────────────────────────────────────────────────────────
-   A store's code is its slug on whichever platform the store lives on:
-
-     OrderMyGear   https://<code>.itemorder.com/shop/home/
-     Chipply       https://<dealer>.chipply.com/<code>
-     Redirect      https://boomerts.com/stores/<code>
-
-   Nothing has to be typed in for existing stores. If a code hasn't been
-   saved, it is read back out of the store's Link, which is already there on
-   every store we've built. A derived code shows dotted and grey; a code
-   typed into the store form shows solid and wins over the derived one.
-
-   The code cell links to the store's Link. It never invents a URL from a
-   code alone — the same slug is a different address on each platform, and a
-   link that goes to the wrong store is worse than no link at all. */
-function btParseStoreCode(url) {
-  if (!url) return '';
-  var raw = String(url).trim();
-  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
-  var u; try { u = new URL(raw); } catch(e) { return ''; }
-  var host = u.hostname.toLowerCase().replace(/^www\./, '');
-  var segs = u.pathname.split('/').filter(Boolean);
-  if (/\.itemorder\.com$/.test(host))   return host.replace(/\.itemorder\.com$/, '');
-  if (/\.ordermygear\.com$/.test(host)) return segs[0] || '';
-  if (/\.chipply\.com$/.test(host))     return segs[0] || host.replace(/\.chipply\.com$/, '');
-  if (segs[0] === 'stores' && segs[1])   return segs[1];
-  if (segs.length)                       return segs[segs.length - 1];
-  return host.split('.')[0] || '';
-}
-
+   The code is whatever is typed into Store Code on the store form, and
+   nothing else. An empty field stays empty. The code links to the store's
+   saved URL when there is one. */
 function btStorePlatform(url) {
   if (!url) return '';
   var h = String(url).toLowerCase();
@@ -2295,17 +2268,15 @@ function btStorePlatform(url) {
 }
 
 function btStoreCodeCell(store) {
-  var saved   = (store.storeCode || '').trim();
-  var code    = saved || btParseStoreCode(store.link);
-  if (!code) return '<span style="color:#c8cdda;">&mdash;</span>';
-  var cls     = 'store-code' + (saved ? '' : ' derived');
-  var plat    = btStorePlatform(store.link);
+  var code = (store.storeCode || '').trim();
+  if (!code) return '';
+  var plat = btStorePlatform(store.link);
   if (store.link) {
-    var tip = 'Open ' + (plat ? plat + ' store' : 'store') + (saved ? '' : ' \u2014 code read from the store link');
-    return '<a href="' + btAttr(store.link) + '" class="' + cls + '" target="_blank" rel="noopener" '
-         + 'title="' + btAttr(tip) + '" onclick="event.stopPropagation()">' + escHtmlBt(code) + '</a>';
+    return '<a href="' + btAttr(store.link) + '" class="store-code" target="_blank" rel="noopener" '
+         + 'title="' + btAttr('Open ' + (plat ? plat + ' store' : 'store')) + '" '
+         + 'onclick="event.stopPropagation()">' + escHtmlBt(code) + '</a>';
   }
-  return '<span class="store-code nolink" title="No store link saved yet \u2014 add one to make this clickable">' + escHtmlBt(code) + '</span>';
+  return '<span class="store-code nolink">' + escHtmlBt(code) + '</span>';
 }
 
 function escHtmlBt(s) {
@@ -2483,7 +2454,7 @@ function btRenderStores() {
         card.addEventListener('click', () => btOpenStoreModal(store.id));
         card.innerHTML = `
           <div class="store-card-name">${store.name}</div>
-          <div class="store-card-row"><span class="store-card-label">Code</span><span class="store-card-value">${btStoreCodeCell(store)}</span></div>
+          ${store.storeCode ? `<div class="store-card-row"><span class="store-card-label">Code</span><span class="store-card-value">${btStoreCodeCell(store)}</span></div>` : ''}
           <div class="store-card-row">
             <span class="store-status-badge ${sCls}">${store.status}</span>
             <span class="store-status-badge" style="${fStyle}">${store.fulfillment||'—'}</span>
@@ -3194,15 +3165,6 @@ function btGetDeliveryDates() {
       .map(i => i.value)
       .filter(Boolean)
   );
-}
-
-/* Typing or pasting a store URL fills in an empty Store Code from it. It
-   never overwrites a code that has been typed by hand. */
-function btAutofillStoreCode(linkInput) {
-  var codeInput = document.getElementById('btSfCode');
-  if (!codeInput || codeInput.value.trim()) return;
-  var derived = btParseStoreCode(linkInput.value);
-  if (derived) codeInput.value = derived;
 }
 
 async function btSaveStore() {
