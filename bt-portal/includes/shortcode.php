@@ -1447,6 +1447,7 @@ add_shortcode( 'bt_schedule', function() {
       <button class="btp-modal-close" onclick="btCloseModal()">&#215;</button>
     </div>
     <div class="btp-modal-body">
+      <div id="btAutoStoreNotice" style="display:none;background:#f3e5f5;border-left:3px solid #7B1FA2;border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:12px;line-height:1.45;color:#4a148c;"></div>
       <div class="bt-form-row">
         <div class="bt-form-group"><label>Due Date</label><input type="date" id="btFDueDate"></div>
         <div class="bt-form-group"><label>Order #</label><input type="text" id="btFOrderNum" placeholder="e.g. 2658901"></div>
@@ -1543,6 +1544,24 @@ add_shortcode( 'bt_schedule', function() {
           </label>
           <div id="btSfDeliveryDates" style="display:flex;flex-direction:column;gap:6px;"></div>
         </div>
+      </div>
+      <div class="bt-form-group" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;">
+        <label>Put On The Schedule</label>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-top:2px;">
+          <label style="flex-direction:row;align-items:center;gap:7px;margin:0;font-size:12.5px;color:#0f1240;cursor:pointer;text-transform:none;letter-spacing:0;display:flex;font-weight:600;">
+            <input type="checkbox" id="btSfSchedOpen" style="width:auto;padding:0;border:none;margin:0;">
+            Open date &mdash; <span style="font-weight:500;color:#9ca3b8;">card reading &ldquo;OPENS&rdquo;</span>
+          </label>
+          <label style="flex-direction:row;align-items:center;gap:7px;margin:0;font-size:12.5px;color:#0f1240;cursor:pointer;text-transform:none;letter-spacing:0;display:flex;font-weight:600;">
+            <input type="checkbox" id="btSfSchedCutoff" style="width:auto;padding:0;border:none;margin:0;">
+            Close date &mdash; <span style="font-weight:500;color:#9ca3b8;">card reading &ldquo;CUTOFF&rdquo;</span>
+          </label>
+          <label style="flex-direction:row;align-items:center;gap:7px;margin:0;font-size:12.5px;color:#0f1240;cursor:pointer;text-transform:none;letter-spacing:0;display:flex;font-weight:600;">
+            <input type="checkbox" id="btSfSchedShip" style="width:auto;padding:0;border:none;margin:0;">
+            Delivery date(s) &mdash; <span style="font-weight:500;color:#9ca3b8;">card reading &ldquo;SHIP&rdquo;</span>
+          </label>
+        </div>
+        <span style="font-size:11px;color:#9ca3b8;margin-top:6px;">Cards land in Online Stores on the schedule and follow these dates if they change. Notes you type on a card are kept.</span>
       </div>
       <div class="bt-form-group" style="border-top:2px solid #d0d4e0;padding-top:12px;margin-top:4px;"><label>Status</label>
         <select id="btSfStatus">
@@ -1922,11 +1941,11 @@ function btNormalizeJob(j) {
   }
   const garmentType = j.garment_type||j.garmentType||'';
   lineItems = lineItems.map(li => ({...li, garment: li.garment || garmentType}));
-  return { id:j.id, orderNum:j.order_num||j.orderNum||'', customer:j.customer||'', qty:parseInt(j.qty)||0, location, lineItems, garmentType, createdBy:j.created_by||j.createdBy||'', dept:j.dept||'', status:j.status||'None', dueDate:j.due_date||j.dueDate||'', artLink:j.art_link||j.artLink||'', notes:j.notes||'', caution: j.caution == 1, sortOrder: parseInt(j.sort_order||j.sortOrder)||0, wooOrderId: parseInt(j.woo_order_id)||0, wooCompletedAt: j.woo_completed_at||'', wooCompletedBy: j.woo_completed_by||'' };
+  return { id:j.id, orderNum:j.order_num||j.orderNum||'', customer:j.customer||'', qty:parseInt(j.qty)||0, location, lineItems, garmentType, createdBy:j.created_by||j.createdBy||'', dept:j.dept||'', status:j.status||'None', dueDate:j.due_date||j.dueDate||'', artLink:j.art_link||j.artLink||'', notes:j.notes||'', caution: j.caution == 1, sortOrder: parseInt(j.sort_order||j.sortOrder)||0, wooOrderId: parseInt(j.woo_order_id)||0, wooCompletedAt: j.woo_completed_at||'', wooCompletedBy: j.woo_completed_by||'', storeId: parseInt(j.store_id)||0, autoKind: j.auto_kind||j.autoKind||'' };
 }
 
 function btNormalizeStore(s) {
-  return { id:s.id, name:s.name||'', storeCode:s.store_code||s.storeCode||'', openDate:s.open_date||s.openDate||'', closeDate:s.close_date||s.closeDate||'', fulfillment:s.fulfillment||'', status:s.status||'Upcoming', link:s.link||'', contactName:s.contact_name||s.contactName||'', contactEmail:s.contact_email||s.contactEmail||'', notes:s.notes||'', categoryId: s.category_id ? parseInt(s.category_id) : null, sortOrder: parseInt(s.sort_order)||0, deliveryDates: s.delivery_dates||s.deliveryDates||'[]' };
+  return { id:s.id, name:s.name||'', storeCode:s.store_code||s.storeCode||'', openDate:s.open_date||s.openDate||'', closeDate:s.close_date||s.closeDate||'', fulfillment:s.fulfillment||'', status:s.status||'Upcoming', link:s.link||'', contactName:s.contact_name||s.contactName||'', contactEmail:s.contact_email||s.contactEmail||'', notes:s.notes||'', categoryId: s.category_id ? parseInt(s.category_id) : null, sortOrder: parseInt(s.sort_order)||0, deliveryDates: s.delivery_dates||s.deliveryDates||'[]', scheduleOpts: s.schedule_opts||s.scheduleOpts||null };
 }
 
 async function btLoadJobs() {
@@ -2643,6 +2662,7 @@ function btOpenModal(jobId, dateStr) {
     if (lineItemsWithGarment.length <= 1) btSelectGarment(gt);
     btSelectDept(job.dept);
     btSelectStatus(job.status);
+    btShowAutoStoreNotice(job);
   } else {
     document.getElementById('btFOrderNum').value = '';
     document.getElementById('btFDueDate').value  = dateStr || btTodayOffset(0);
@@ -2655,6 +2675,7 @@ function btOpenModal(jobId, dateStr) {
     document.getElementById('btFGarmentType').value = '';
     document.getElementById('btFGarmentOther').style.display = 'none';
     document.getElementById('btFGarmentOther').value = '';
+    btShowAutoStoreNotice(null);
     btSelectDept('');
     btSetLineItems([]);
     btSelectStatus('None');
@@ -2688,6 +2709,24 @@ function btGetGarmentType() {
   const val = document.getElementById('btFGarmentType').value;
   if (val === 'Other') return document.getElementById('btFGarmentOther').value.trim() || 'Other';
   return val;
+}
+
+/*
+ * Cards made from an online store keep their title and date in step with that
+ * store, so editing either here is undone the next time the store is saved.
+ * Say so rather than letting someone find out the hard way. The note is safe
+ * to edit: once it differs from what was generated, it is left alone.
+ */
+function btShowAutoStoreNotice(job) {
+  const el = document.getElementById('btAutoStoreNotice');
+  if (!el) return;
+  if (!job || !job.autoKind || !job.storeId) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const store = (btStores || []).find(s => s.id == job.storeId);
+  const label = btEscHtml(store ? store.name : 'an online store');
+  el.innerHTML = '<strong>Made from ' + label + ' on the Online Stores tab.</strong> '
+    + 'The title and date follow the store, so changes to those two here are replaced next time the store is saved. '
+    + 'The note, status and position are yours and are kept.';
+  el.style.display = 'block';
 }
 
 function btOpenModalForDate(dateStr, e) {
@@ -3102,6 +3141,7 @@ function btOpenStoreModal(storeId) {
     document.getElementById('btSfNotes').value  = s.notes;
     catSelect.value = s.categoryId || '';
     btSetDeliveryDates(s.deliveryDates);
+    btSetScheduleOpts(s.scheduleOpts);
   } else {
     document.getElementById('btSfName').value   = '';
     document.getElementById('btSfCode').value   = '';
@@ -3117,6 +3157,8 @@ function btOpenStoreModal(storeId) {
     document.getElementById('btSfNotes').value  = '';
     catSelect.value = '';
     btSetDeliveryDates('[]');
+    /* New stores get the two dates production actually works to. */
+    btSetScheduleOpts({open:false, cutoff:true, ship:true});
   }
   document.getElementById('btStoreModalOverlay').classList.add('open');
   document.querySelector('#btStoreModalOverlay .bt-modal-wrap').scrollTop = 0;
@@ -3159,6 +3201,23 @@ function btSetDeliveryDates(json) {
   }
 }
 
+function btSetScheduleOpts(raw) {
+  let o = raw;
+  if (typeof o === 'string') { try { o = JSON.parse(o); } catch(e) { o = null; } }
+  if (!o || typeof o !== 'object') o = {open:false, cutoff:false, ship:false};
+  document.getElementById('btSfSchedOpen').checked   = !!o.open;
+  document.getElementById('btSfSchedCutoff').checked = !!o.cutoff;
+  document.getElementById('btSfSchedShip').checked   = !!o.ship;
+}
+
+function btGetScheduleOpts() {
+  return {
+    open:   document.getElementById('btSfSchedOpen').checked,
+    cutoff: document.getElementById('btSfSchedCutoff').checked,
+    ship:   document.getElementById('btSfSchedShip').checked,
+  };
+}
+
 function btGetDeliveryDates() {
   return JSON.stringify(
     Array.from(document.querySelectorAll('#btSfDeliveryDates input[type="date"]'))
@@ -3181,6 +3240,7 @@ async function btSaveStore() {
     notes:       document.getElementById('btSfNotes').value.trim(),
     category_id: document.getElementById('btSfCategory').value || null,
     delivery_dates: btGetDeliveryDates(),
+    schedule_opts: btGetScheduleOpts(),
   };
   if (!payload.name) { alert('Please enter a store name.'); return; }
   btSaving(true);
@@ -3189,6 +3249,8 @@ async function btSaveStore() {
     else { await btFetch('/stores', 'POST', payload); }
     btCloseStoreModal();
     await btLoadAndRenderStores();
+    /* The save may have added, moved or removed cards on the board. */
+    try { await btLoadJobs(); btRenderBoard(); } catch(e) { console.error('Board refresh after store save:', e); }
   } catch(e) { alert('Error saving store.'); }
   btSaving(false);
 }
@@ -3200,6 +3262,7 @@ async function btDeleteStore() {
     await btFetch('/stores/'+btActiveStore, 'DELETE');
     btCloseStoreModal();
     await btLoadAndRenderStores();
+    try { await btLoadJobs(); btRenderBoard(); } catch(e) { console.error('Board refresh after store delete:', e); }
   } catch(e) { alert('Error deleting store.'); }
   btSaving(false);
 }

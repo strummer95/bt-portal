@@ -167,7 +167,7 @@ function btp_get_stores( $request ) {
 function btp_create_store( $request ) {
     global $wpdb; $table = $wpdb->prefix.'bt_stores';
     $p = $request->get_json_params();
-    $result = $wpdb->insert($table,[
+    $row_data = [
         'name'           => sanitize_text_field($p['name']??''),
         'store_code'     => sanitize_text_field($p['store_code']??''),
         'open_date'      => sanitize_text_field($p['open_date']??'') ?: null,
@@ -181,15 +181,23 @@ function btp_create_store( $request ) {
         'category_id'    => !empty($p['category_id']) ? intval($p['category_id']) : null,
         'sort_order'     => intval($p['sort_order']??0),
         'delivery_dates' => sanitize_text_field($p['delivery_dates']??'[]'),
-    ]);
+    ];
+    // Only written once the migration has added the column, so a site where
+    // the ALTER has not run yet still saves stores normally.
+    if ( function_exists('btp_ss_opts_col') && btp_ss_opts_col() ) {
+        $row_data['schedule_opts'] = btp_sanitize_schedule_opts($p['schedule_opts']??null);
+    }
+    $result = $wpdb->insert($table, $row_data);
     if ($result===false) return new WP_Error('db_error','Could not create store',['status'=>500]);
-    return rest_ensure_response($wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d",$wpdb->insert_id)));
+    $new_id = $wpdb->insert_id;
+    if ( function_exists('btp_store_schedule_sync') ) btp_store_schedule_sync($new_id);
+    return rest_ensure_response($wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d",$new_id)));
 }
 
 function btp_update_store( $request ) {
     global $wpdb; $table = $wpdb->prefix.'bt_stores'; $id = intval($request['id']);
     $p = $request->get_json_params();
-    $wpdb->update($table,[
+    $row_data = [
         'name'           => sanitize_text_field($p['name']??''),
         'store_code'     => sanitize_text_field($p['store_code']??''),
         'open_date'      => sanitize_text_field($p['open_date']??'') ?: null,
@@ -203,14 +211,36 @@ function btp_update_store( $request ) {
         'category_id'    => !empty($p['category_id']) ? intval($p['category_id']) : null,
         'sort_order'     => intval($p['sort_order']??0),
         'delivery_dates' => sanitize_text_field($p['delivery_dates']??'[]'),
-    ],['id'=>$id]);
+    ];
+    if ( function_exists('btp_ss_opts_col') && btp_ss_opts_col() ) {
+        $row_data['schedule_opts'] = btp_sanitize_schedule_opts($p['schedule_opts']??null);
+    }
+    $wpdb->update($table, $row_data, ['id'=>$id]);
+    if ( function_exists('btp_store_schedule_sync') ) btp_store_schedule_sync($id);
     return rest_ensure_response($wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d",$id)));
 }
 
 function btp_delete_store( $request ) {
     global $wpdb; $table = $wpdb->prefix.'bt_stores'; $id = intval($request['id']);
+    if ( function_exists('btp_store_schedule_purge') ) btp_store_schedule_purge($id);
     $wpdb->delete($table,['id'=>$id]);
     return rest_ensure_response(['deleted'=>true,'id'=>$id]);
+}
+
+/**
+ * Normalise the three schedule checkboxes into stored JSON. A store saved
+ * before this existed sends nothing, and keeps whatever it already had
+ * (NULL, meaning no cards) rather than being switched off explicitly.
+ */
+function btp_sanitize_schedule_opts( $raw ) {
+    if ( $raw === null || $raw === '' ) return null;
+    $o = is_array($raw) ? $raw : json_decode((string) $raw, true);
+    if ( ! is_array($o) ) return null;
+    return wp_json_encode([
+        'open'   => ! empty($o['open']),
+        'cutoff' => ! empty($o['cutoff']),
+        'ship'   => ! empty($o['ship']),
+    ]);
 }
 
 function btp_reorder_stores( $request ) {
@@ -335,16 +365,31 @@ function btp_restore_backup( $request ) {
         'stores' => $wpdb->get_results("SELECT * FROM $stores", ARRAY_A),
     ]);
     $wpdb->insert($table, ['label'=>'Pre-restore — '.date('M j, Y g:i a'), 'type'=>'pre_restore', 'snapshot'=>$pre]);
+    // Stores are reinserted with fresh ids, so any store_id stamped on a job
+    // by the schedule sync would point at the wrong store (or nothing) after a
+    // restore. Rebuild the map as we go and rewrite the jobs to match.
+    $wpdb->query("TRUNCATE TABLE $stores");
+    $store_map = [];
+    foreach ($snap['stores'] ?? [] as $store) {
+        $old_store_id = isset($store['id']) ? intval($store['id']) : 0;
+        unset($store['id']);
+        $wpdb->insert($stores, $store);
+        if ($old_store_id) $store_map[$old_store_id] = $wpdb->insert_id;
+    }
+
     $wpdb->query("TRUNCATE TABLE $jobs");
     foreach ($snap['jobs'] ?? [] as $job) {
         unset($job['id']);
+        if ( ! empty($job['store_id']) ) {
+            $old_ref = intval($job['store_id']);
+            $job['store_id'] = $store_map[$old_ref] ?? null;
+            if ( $job['store_id'] === null ) $job['auto_kind'] = '';
+        }
         $wpdb->insert($jobs, $job);
     }
-    $wpdb->query("TRUNCATE TABLE $stores");
-    foreach ($snap['stores'] ?? [] as $store) {
-        unset($store['id']);
-        $wpdb->insert($stores, $store);
-    }
+
+    if ( function_exists('btp_store_schedule_sync_all') ) btp_store_schedule_sync_all();
+
     return rest_ensure_response(['restored'=>true, 'label'=>$row->label]);
 }
 

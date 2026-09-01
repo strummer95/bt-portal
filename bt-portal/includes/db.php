@@ -219,6 +219,35 @@ add_action( 'init', function() {
     update_option( 'bt_schedule_db_migrated_v6', '1' );
 });
 
+// ── MIGRATION: link columns for store-generated schedule cards ───────────
+// store_id / auto_kind tie a job card back to the online store that made it;
+// auto_sig holds the md5 of the note we last wrote, so a note edited by hand
+// can be told apart from one we own and is never overwritten.
+add_action( 'init', function() {
+    if ( get_option( 'bt_store_schedule_v1' ) ) return;
+    global $wpdb;
+
+    $jobs = $wpdb->prefix . 'bt_jobs';
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM $jobs", 0);
+    if ( ! in_array('store_id', $cols) )
+        $wpdb->query("ALTER TABLE $jobs ADD COLUMN store_id bigint(20) DEFAULT NULL");
+    if ( ! in_array('auto_kind', $cols) )
+        $wpdb->query("ALTER TABLE $jobs ADD COLUMN auto_kind varchar(32) NOT NULL DEFAULT ''");
+    if ( ! in_array('auto_sig', $cols) )
+        $wpdb->query("ALTER TABLE $jobs ADD COLUMN auto_sig varchar(64) NOT NULL DEFAULT ''");
+
+    $idx = $wpdb->get_results("SHOW INDEX FROM $jobs WHERE Key_name='bt_jobs_store_id'");
+    if ( empty($idx) )
+        $wpdb->query("ALTER TABLE $jobs ADD INDEX bt_jobs_store_id (store_id)");
+
+    $stores = $wpdb->prefix . 'bt_stores';
+    $scols  = $wpdb->get_col("SHOW COLUMNS FROM $stores", 0);
+    if ( ! in_array('schedule_opts', $scols) )
+        $wpdb->query("ALTER TABLE $stores ADD COLUMN schedule_opts text DEFAULT NULL");
+
+    update_option( 'bt_store_schedule_v1', '1' );
+});
+
 // ── MIGRATION: create bt_day_notes table (shared day-header notes) ───────
 add_action( 'init', function() {
     if ( get_option( 'bt_day_notes_v1' ) ) return;
