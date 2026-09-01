@@ -101,7 +101,7 @@ function btp_exchange_email_html( $order, $kind, $tracking ) {
     } elseif ( $kind === 'ready_pickup' ) {
         $headline = 'Your exchange is ready to pick up';
         $lead     = 'Your replacement is finished and waiting for you at the shop in Oswego.';
-        $foot     = 'We\'re at 1505 Mitchell Dr, Oswego, IL 60543. Give us a call on the way if you want it pulled and ready at the counter.';
+        $foot     = 'We\'re at 1505 Mitchell Dr, Oswego, IL 60543. Your order is bagged with your name on it and waiting by the door, so just come in and grab it.';
     } else {
         $headline = 'Your exchange is on its way';
         $lead     = 'Your replacement has shipped and is heading back to you.';
