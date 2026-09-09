@@ -1692,7 +1692,7 @@ const BT_ART_HOST_BY_SHARE = {
 const BT_ART_SYNC_HOST = BT_ART_HOST;
 const BT_ART_SYNC_FOLDER_TO_SHARE = {
   // 'synced folder name in lower case': 'ShareName\\Sub\\Folder',
-  // '1 - artwork': 'BTServer\\1 - ARTWORK',
+  '1 - artwork': 'BTServer\\1 - ARTWORK',
 };
 
 function btIsMac() {
