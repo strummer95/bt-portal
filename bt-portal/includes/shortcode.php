@@ -1678,6 +1678,23 @@ const BT_ART_HOST_BY_SHARE = {
   'production': 'BT-NAS',
 };
 
+/* Synology Drive Client keeps a synced copy inside the user's own home folder,
+   so those paths LOOK local but point at the same files everyone else opens off
+   the server. Each folder at the top of the sync root is a Synology shared
+   folder, and a Synology shared folder IS its SMB share name, so the rest of
+   the path maps straight across.
+
+   Change BT_ART_SYNC_HOST if the synced folders live on a different box than
+   BT_ART_HOST. Add a line to BT_ART_SYNC_FOLDER_TO_SHARE if a synced folder
+   is named differently on the server, or if it is not a share of its own but
+   a folder sitting inside one. The value is everything after the server name:
+   either 'ShareName' or 'ShareName\\Sub\\Folder'. */
+const BT_ART_SYNC_HOST = BT_ART_HOST;
+const BT_ART_SYNC_FOLDER_TO_SHARE = {
+  // 'synced folder name in lower case': 'ShareName\\Sub\\Folder',
+  // '1 - artwork': 'BTServer\\1 - ARTWORK',
+};
+
 function btIsMac() {
   const s = (navigator.userAgent || '') + ' ' + (navigator.platform || '');
   return /Mac|iPhone|iPad|iPod/i.test(s);
@@ -1724,6 +1741,28 @@ function btParseArtPath(raw) {
     const host = m[1].replace(/\.(local|lan)$/i, '');
     const rest = m[2].replace(/\/+$/, '').replace(/\//g, '\\');
     return { kind: 'share', unc: '\\\\' + host + '\\' + rest, ok: true, message: '' };
+  }
+
+  // Synology Drive sync folder. Matches the current client
+  //   /Users/<who>/Library/CloudStorage/SynologyDrive-<connection>/<Shared Folder>/...
+  // the older client default
+  //   /Users/<who>/SynologyDrive/<Shared Folder>/...
+  // and the same thing reached as a mounted volume
+  //   /Volumes/SynologyDrive-<connection>/<Shared Folder>/...
+  m = p.match(/^(?:\/Users\/[^\/]+\/(?:Library\/CloudStorage\/)?|\/Volumes\/)Synology[ _-]?Drive(?:[ _-][^\/]+)?\/(.+)$/i);
+  if (m) {
+    const parts  = m[1].replace(/\/+$/, '').split('/');
+    const folder = parts.shift();
+    const key    = folder.toLowerCase();
+    const known  = Object.prototype.hasOwnProperty.call(BT_ART_SYNC_FOLDER_TO_SHARE, key);
+    const target = (known ? BT_ART_SYNC_FOLDER_TO_SHARE[key] : folder).replace(/^\\+|\\+$/g, '');
+    const rest   = parts.join('\\');
+    return {
+      kind: 'share',
+      unc: '\\\\' + BT_ART_SYNC_HOST + '\\' + target + (rest ? '\\' + rest : ''),
+      ok: true,
+      message: known ? '' : 'Synology Drive folder. Treating "' + folder + '" as a share on ' + BT_ART_SYNC_HOST + '.'
+    };
   }
 
   // Already a UNC path (or //server/share typed with forward slashes).
