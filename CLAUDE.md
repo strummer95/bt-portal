@@ -1,11 +1,11 @@
 # BT Portal
 
 Boomer T's employee portal. Schedule board, online stores, quote tab, redirect tool,
-contacts, exchange tracking, vendors, OMG and Chipply scanners, day notes, backups, and the
+contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orders, day notes, backups, and the
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.47.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.51.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -75,6 +75,14 @@ bt-accounts**. Whichever plugin loads first defines `bt_admin_updates_panel()`; 
 skip it via `function_exists`. Do not fork it. If it changes, re-copy it into all four in
 the same release round. Anything plugin-specific goes above the panel, in that plugin's own
 code.
+
+## Other > Accounts (0.51.0)
+
+The pane only hosts BT Accounts' `[bta_staff_orders]`; all of its logic, REST and styling
+live in the bt-accounts repo (`includes/staff-orders.php`). The menu item and pane render
+only when that shortcode exists and the user has `bta_handle_orders`, which is granted per
+person under BT Accounts > Shop staff, not by portal role. `btSwitchTab()` falls back to
+Schedule when a tab's pane is missing, so `/employees/accounts` is safe for everyone.
 
 ## Auth model
 

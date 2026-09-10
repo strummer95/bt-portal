@@ -33,6 +33,9 @@ add_shortcode( 'bt_schedule', function() {
     // Remember which page this is, so /employees/exchanges can be routed to it.
     if ( function_exists('btp_note_portal_page') ) btp_note_portal_page();
     $btp_initial_tab = function_exists('btp_requested_tab') ? btp_requested_tab() : '';
+
+    // Other > Accounts: BT Accounts' order queue, for whoever it lets in.
+    $btp_bta_orders = shortcode_exists('bta_staff_orders') && current_user_can('bta_handle_orders');
     $btp_routing = wp_json_encode( array(
         'base'   => function_exists('btp_portal_base_url') ? btp_portal_base_url() : '',
         'pretty' => function_exists('btp_pretty_urls') ? btp_pretty_urls() : false,
@@ -1166,6 +1169,9 @@ add_shortcode( 'bt_schedule', function() {
           <div class="tab-menu" id="btMoreMenu">
             <div class="tab-menu-item" data-tab="contacts" onclick="btSwitchTab('contacts')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts</div>
             <div class="tab-menu-item" data-tab="exchanges" onclick="btSwitchTab('exchanges')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Exchanges</div>
+            <?php if ( $btp_bta_orders ) : ?>
+            <div class="tab-menu-item" data-tab="accounts" onclick="btSwitchTab('accounts')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="2" y1="13" x2="22" y2="13"/></svg>Accounts</div>
+            <?php endif; ?>
             <div class="tab-menu-item" data-tab="omgscan" onclick="btSwitchTab('omgscan')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 5v14"/><path d="M7 5v14"/><path d="M11 5v14"/><path d="M15 5v14"/><path d="M19 5v14"/></svg>OMG Scanner</div>
             <!-- HIDDEN: Chipply Barcoder. Chipply now stamps its own barcodes; kept for
                  continuation pages and older exports. Uncomment to restore.
@@ -1401,6 +1407,15 @@ add_shortcode( 'bt_schedule', function() {
   </div>
 </div>
 			
+<?php if ( $btp_bta_orders ) : ?>
+<!-- ACCOUNTS TAB: BT Accounts renders its own order queue; the portal only hosts it -->
+<div id="bt-tab-accounts" class="tab-content" style="width:100%;box-sizing:border-box;">
+  <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
+    <?php echo do_shortcode('[bta_staff_orders]'); ?>
+  </div>
+</div>
+<?php endif; ?>
+
 <!-- OMG SCANNER TAB -->
 <div id="bt-tab-omgscan" class="tab-content" style="width:100%;box-sizing:border-box;">
   <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
@@ -4344,7 +4359,7 @@ async function btRestoreFromBackup(id, label) {
 /* ── TABS ── */
 /* Tabs that live inside the OTHER dropdown rather than on the bar itself.
    Add a tab here and it needs nothing else in this function. */
-const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', omgscan: 'OMG Scanner', chipscan: 'Chipply Scanner' };  // barcoder: 'Chipply Barcoder' — hidden
+const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', accounts: 'Accounts', omgscan: 'OMG Scanner', chipscan: 'Chipply Scanner' };  // barcoder: 'Chipply Barcoder' — hidden
 
 function btToggleMore(e) {
   // Clicks on the menu items bubble up to this handler; ignore them so the
@@ -4363,6 +4378,10 @@ document.addEventListener('click', function(e) {
 });
 
 function btSwitchTab(tab, push) {
+  // A tab can be missing for this person (Accounts is only rendered for staff
+  // who have it). Landing on its link falls back to Schedule instead of
+  // throwing and taking the rest of the page down with it.
+  if (!document.getElementById('bt-tab-'+tab)) tab = 'schedule';
   document.querySelectorAll('#bt-schedule-app .header-tabs > .tab').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   document.querySelectorAll('#bt-schedule-app .tab-menu-item').forEach(t => t.classList.toggle('active', t.dataset.tab===tab));
   document.querySelectorAll('#bt-schedule-app .tab-content').forEach(c => c.classList.remove('active'));
@@ -4391,6 +4410,7 @@ function btSwitchTab(tab, push) {
   if (isStores) btLoadAndRenderStores();
   if (tab === 'contacts') btLoadContacts();
   if (tab === 'vendors')  btvLoad();
+  if (tab === 'accounts' && window.btaStaffLoad) window.btaStaffLoad();
 
   // The exchange poll is tied to the tab, not the page.
   if (tab === 'exchanges') { btLoadExchanges(); btStartExPoll(); }

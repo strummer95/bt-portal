@@ -28,6 +28,7 @@ function btp_tab_map() {
         'redirect'      => 'redirect',
         'contacts'      => 'contacts',
         'exchanges'     => 'exchanges',
+        'accounts'      => 'accounts',
         'omg-scanner'   => 'omgscan',
         'scanner'       => 'omgscan',    // convenience alias
         // 'chipply-barcoder' => 'barcoder',   // hidden — see shortcode.php
@@ -45,6 +46,7 @@ function btp_tab_slugs() {
         'redirect'  => 'redirect',
         'contacts'  => 'contacts',
         'exchanges' => 'exchanges',
+        'accounts'  => 'accounts',
         'omgscan'   => 'omg-scanner',
         // 'barcoder'  => 'chipply-barcoder',  // hidden
         'chipscan'  => 'chipply-scanner',
