@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.52.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.53.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -88,6 +88,12 @@ Schedule when a tab's pane is missing, so `/employees/accounts` is safe for ever
 `orderNum`, `customer`, `dueDate`, `notes`, `lineItems`, `dept` filled in, and after a
 successful POST calls `onCreated` with the saved row. `btCloseModal()` clears the
 hand-off, so cancel calls nothing. BT Accounts' Create job card button is the caller.
+
+Sub-addresses (0.53.0): a second rewrite rule maps `/employees/<tab>/<item>/` to the page
+with `btp_tab` + `btp_item` (`?tab=x&item=y` without pretty permalinks). JS helpers
+`btpCurrentItem()` and `btpSetItem(tab, item)`; `btTabFromUrl()` reads only the first
+segment. `btSwitchTab()` calls the Accounts loader after its pushState, so the tab always
+reads the settled address. Only Accounts uses items so far (order number, lowercased).
 
 ## Auth model
 

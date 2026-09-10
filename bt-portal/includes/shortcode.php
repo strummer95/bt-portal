@@ -1646,12 +1646,46 @@ function btTabFromUrl() {
     const base = new URL(BT_ROUTE.base).pathname.replace(/\/+$/, '');
     const here = url.pathname.replace(/\/+$/, '');
     if (here.length > base.length && here.indexOf(base) === 0) {
-      const tail = here.slice(base.length + 1);
+      // First part only: /employees/accounts/cin-1001 is still the Accounts tab.
+      const tail = here.slice(base.length + 1).split('/')[0];
       for (const t in slugs) if (slugs[t] === tail || t === tail) return t;
     }
   } catch (e) { /* fall through to the default */ }
   return 'schedule';
 }
+
+/* One thing inside a tab gets its own address too: /employees/accounts/cin-1001
+   (?tab=accounts&item=cin-1001 without pretty permalinks). Tabs that use it
+   read it with btpCurrentItem() and set it with btpSetItem(); the portal just
+   keeps it in the address bar so refresh, Back and shared links all work. */
+function btpCleanItem(item) {
+  return String(item || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
+}
+window.btpCurrentItem = function() {
+  try {
+    const url = new URL(window.location.href);
+    const q = url.searchParams.get('item');
+    if (q) return btpCleanItem(q);
+    const base = new URL(BT_ROUTE.base).pathname.replace(/\/+$/, '');
+    const here = url.pathname.replace(/\/+$/, '');
+    if (here.length > base.length && here.indexOf(base) === 0) {
+      return btpCleanItem(here.slice(base.length + 1).split('/')[1] || '');
+    }
+  } catch (e) {}
+  return '';
+};
+window.btpSetItem = function(tab, item) {
+  item = btpCleanItem(item);
+  let next = btTabUrl(tab);
+  if (item) {
+    next = BT_ROUTE.pretty
+      ? next.replace(/\/?$/, '/') + item + '/'
+      : next + (next.indexOf('?') > -1 ? '&' : '?') + 'item=' + encodeURIComponent(item);
+  }
+  try {
+    if (next !== window.location.href) window.history.pushState({ btTab: tab, btItem: item }, '', next);
+  } catch (e) {}
+};
 
 /* Before 0.5.2 the quote tool wrote its selections onto the portal's own URL,
    so employees ended up on /employees/?qty=4&g=supplied&loc=2 and it stuck
@@ -4434,7 +4468,6 @@ function btSwitchTab(tab, push) {
   if (isStores) btLoadAndRenderStores();
   if (tab === 'contacts') btLoadContacts();
   if (tab === 'vendors')  btvLoad();
-  if (tab === 'accounts' && window.btaStaffLoad) window.btaStaffLoad();
 
   // The exchange poll is tied to the tab, not the page.
   if (tab === 'exchanges') { btLoadExchanges(); btStartExPoll(); }
@@ -4449,6 +4482,10 @@ function btSwitchTab(tab, push) {
       if (next && next !== window.location.href) window.history.pushState({ btTab: tab }, '', next);
     } catch (e) {}
   }
+
+  // After the address is settled: Accounts shows whatever the address names
+  // (an order, or the list), so it has to read the new one, not the old.
+  if (tab === 'accounts' && window.btaStaffLoad) window.btaStaffLoad();
 }
 
 window.addEventListener('popstate', function() {

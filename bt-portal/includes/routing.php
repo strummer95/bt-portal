@@ -76,6 +76,14 @@ add_action('init', function() {
         'top'
     );
 
+    // One thing inside a tab: /employees/accounts/cin-1001. The tab decides
+    // what the second part means; the portal only carries it to the page.
+    add_rewrite_rule(
+        '^' . preg_quote( $uri, '/' ) . '/([a-z0-9-]+)/([a-z0-9-]+)/?$',
+        'index.php?page_id=' . $page_id . '&btp_tab=$matches[1]&btp_item=$matches[2]',
+        'top'
+    );
+
     // Flush only when the page or the plugin version changed — never per load.
     $stamp = $page_id . '|' . ( defined('BTP_VERSION') ? BTP_VERSION : '0' );
     if ( get_option('btp_rewrite_stamp') !== $stamp ) {
@@ -86,6 +94,7 @@ add_action('init', function() {
 
 add_filter('query_vars', function( $vars ) {
     $vars[] = 'btp_tab';
+    $vars[] = 'btp_item';
     return $vars;
 });
 
