@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.51.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.52.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -83,6 +83,11 @@ live in the bt-accounts repo (`includes/staff-orders.php`). The menu item and pa
 only when that shortcode exists and the user has `bta_handle_orders`, which is granted per
 person under BT Accounts > Shop staff, not by portal role. `btSwitchTab()` falls back to
 Schedule when a tab's pane is missing, so `/employees/accounts` is safe for everyone.
+
+`window.btpNewJob(prefill, onCreated)` (0.52.0) opens the normal New Job window with
+`orderNum`, `customer`, `dueDate`, `notes`, `lineItems`, `dept` filled in, and after a
+successful POST calls `onCreated` with the saved row. `btCloseModal()` clears the
+hand-off, so cancel calls nothing. BT Accounts' Create job card button is the caller.
 
 ## Auth model
 

@@ -2791,7 +2791,26 @@ function btOpenModalForDate(dateStr, e) {
 function btCloseModal() {
   document.getElementById('btpJobModalOverlay').classList.remove('open');
   btActiveJob = null;
+  btNewJobDone = null;   // cancelled or saved, the caller's hand-off is spent
 }
+
+/* ── NEW JOB FROM ANOTHER TAB ──
+   Lets another tab (BT Accounts' order queue, under Other > Accounts) open the
+   ordinary New Job window with fields filled in, and hands the saved card back
+   so that tab can link to it. Nothing else about the window changes: same
+   fields, same required checks, same save, and the card lands on the board
+   like any other. Cancelling calls nothing. */
+let btNewJobDone = null;
+window.btpNewJob = function(prefill, onCreated) {
+  const p = prefill || {};
+  btOpenModal(null, p.dueDate || '');
+  if (p.orderNum) document.getElementById('btFOrderNum').value = p.orderNum;
+  if (p.customer) document.getElementById('btFCustomer').value = p.customer;
+  if (p.notes)    document.getElementById('btFNotes').value    = p.notes;
+  if (p.lineItems && p.lineItems.length) btSetLineItems(p.lineItems);
+  if (p.dept)     btSelectDept(p.dept);
+  btNewJobDone = typeof onCreated === 'function' ? onCreated : null;
+};
 
 function btSelectDept(val) {
   document.querySelectorAll('.bt-dept-grid .bt-select-option').forEach(o => o.classList.toggle('selected', o.dataset.val===val));
@@ -2831,9 +2850,11 @@ async function btSaveJob() {
   }
   btSaving(true);
   let btSaveOk = false;
+  let created = null;
+  const handOff = btActiveJob ? null : btNewJobDone;   // btCloseModal clears it
   try {
     if (btActiveJob) { await btFetch('/jobs/'+btActiveJob, 'PUT', payload); }
-    else { await btFetch('/jobs', 'POST', payload); }
+    else { created = await btFetch('/jobs', 'POST', payload); }
     btSaveOk = true;
   } catch(e) {
     console.error('Save job error:', e);
@@ -2843,6 +2864,9 @@ async function btSaveJob() {
   if (btSaveOk) {
     btSearchCacheTime = 0;
     btCloseModal();
+    if (handOff && created && created.id) {
+      try { handOff(created); } catch(e) { console.error('New job hand-off error:', e); }
+    }
     try { await btLoadJobs(); btRenderBoard(); } catch(e) { console.error('Reload error after save:', e); }
   }
 }
