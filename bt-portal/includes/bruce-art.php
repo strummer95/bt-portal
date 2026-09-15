@@ -13,6 +13,11 @@
  * script they are not using, and the iframe is built while its pane is
  * visible, so resizeToFit measures a real width instead of a hidden 0px box.
  *
+ * Sizing: with resizeToFit the SDK first sizes the iframe to fill the window
+ * minus everything below it, then switches to the Bruce page's own height once
+ * it connects. So nothing in this pane gets a min-height; empty space under the
+ * iframe would be subtracted from it.
+ *
  * Note: this keeps the embed off the public site. It does not lock the Bruce
  * site itself; anyone who has its direct address can still reach it. That is
  * a setting on Bruce's side, if they offer one.
@@ -37,7 +42,7 @@ function btp_bruce_art_shortcode() {
     ob_start();
     ?>
 <div id="btp-bruce-art">
-  <div id="btp-bruce-embed" style="display:block;width:100%;min-height:calc(100vh - 140px);"></div>
+  <div id="btp-bruce-embed" style="display:block;width:100%;"></div>
   <div id="btp-bruce-msg" style="display:none;padding:40px;text-align:center;color:#5a6380;font-family:Barlow,sans-serif;font-size:16px;"></div>
 </div>
 <script>
@@ -54,8 +59,12 @@ function btp_bruce_art_shortcode() {
 
   function build() {
     try {
+      // The SDK reads embedContainer, not container. Without it, it looks for
+      // an element named "bruce-embed", finds none, and appends a new box to
+      // the bottom of <body>, which is where 0.54.0 put the iframe.
       new window.BruceSdk({
         siteUrl: CFG.siteUrl,
+        embedContainer: 'btp-bruce-embed',
         container: 'btp-bruce-embed',
         resizeToFit: true
       }).createSiteIframeEmbed();

@@ -1433,7 +1433,7 @@ add_shortcode( 'bt_schedule', function() {
 
 <!-- BRUCE ART TAB: behind the portal login; SDK loads on first open -->
 <div id="bt-tab-bruceart" class="tab-content" style="width:100%;box-sizing:border-box;">
-  <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
+  <div style="background:#f4f5f9;width:100%;box-sizing:border-box;">
     <?php echo do_shortcode('[bt_bruce_art]'); ?>
   </div>
 </div>

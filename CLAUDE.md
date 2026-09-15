@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.54.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.54.1**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -170,7 +170,7 @@ rather than load-bearing.
 Hosts the Bruce site iframe embed (`boomerts.sites.askbruce.ai`) behind the portal login.
 The SDK script is injected by `window.btpBruceArtLoad()`, which `btSwitchTab()` calls on
 open, so it never loads on other tabs and the iframe is built while visible (resizeToFit
-measures a real width). Container id is `btp-bruce-embed`, not Bruce's stock
+measures a real width). The SDK reads `embedContainer`, NOT `container`; without it it appends a new div to <body> (0.54.0 bug). Pane has no min-height on purpose: the fill sizing subtracts space below the iframe. Container id is `btp-bruce-embed`, not Bruce's stock
 `bruce-embed`, to stay clear of the future catalog/quote Bruce embed. Site and SDK URLs are
 `BTP_BRUCE_SITE_URL` / `BTP_BRUCE_SDK_URL` constants with filters. Hiding the embed does not
 lock the Bruce site's own public URL.
