@@ -1177,6 +1177,7 @@ add_shortcode( 'bt_schedule', function() {
                  continuation pages and older exports. Uncomment to restore.
             <div class="tab-menu-item" data-tab="barcoder" onclick="btSwitchTab('barcoder')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2"/><path d="M17 4h2a1 1 0 0 1 1 1v2"/><path d="M20 17v2a1 1 0 0 1-1 1h-2"/><path d="M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 9v6"/><path d="M11 9v6"/><path d="M14 9v6"/><path d="M16.5 9v6"/></svg>Chipply Barcoder</div> -->
             <div class="tab-menu-item" data-tab="chipscan" onclick="btSwitchTab('chipscan')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>Chipply Scanner</div>
+            <div class="tab-menu-item" data-tab="bruceart" onclick="btSwitchTab('bruceart')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>Bruce Art</div>
           </div>
         </div>
       </div>
@@ -1427,6 +1428,13 @@ add_shortcode( 'bt_schedule', function() {
 <div id="bt-tab-chipscan" class="tab-content" style="width:100%;box-sizing:border-box;">
   <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
     <?php echo do_shortcode('[bt_chipply_scanner]'); ?>
+  </div>
+</div>
+
+<!-- BRUCE ART TAB: behind the portal login; SDK loads on first open -->
+<div id="bt-tab-bruceart" class="tab-content" style="width:100%;box-sizing:border-box;">
+  <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
+    <?php echo do_shortcode('[bt_bruce_art]'); ?>
   </div>
 </div>
 
@@ -4417,7 +4425,7 @@ async function btRestoreFromBackup(id, label) {
 /* ── TABS ── */
 /* Tabs that live inside the OTHER dropdown rather than on the bar itself.
    Add a tab here and it needs nothing else in this function. */
-const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', accounts: 'Accounts', omgscan: 'OMG Scanner', chipscan: 'Chipply Scanner' };  // barcoder: 'Chipply Barcoder' — hidden
+const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', accounts: 'Accounts', omgscan: 'OMG Scanner', chipscan: 'Chipply Scanner', bruceart: 'Bruce Art' };  // barcoder: 'Chipply Barcoder' — hidden
 
 function btToggleMore(e) {
   // Clicks on the menu items bubble up to this handler; ignore them so the
@@ -4486,6 +4494,9 @@ function btSwitchTab(tab, push) {
   // After the address is settled: Accounts shows whatever the address names
   // (an order, or the list), so it has to read the new one, not the old.
   if (tab === 'accounts' && window.btaStaffLoad) window.btaStaffLoad();
+
+  // Bruce's SDK loads the first time the tab is actually visible.
+  if (tab === 'bruceart' && window.btpBruceArtLoad) window.btpBruceArtLoad();
 }
 
 window.addEventListener('popstate', function() {

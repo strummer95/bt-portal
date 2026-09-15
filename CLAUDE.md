@@ -1,11 +1,11 @@
 # BT Portal
 
 Boomer T's employee portal. Schedule board, online stores, quote tab, redirect tool,
-contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orders, day notes, backups, and the
+contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orders, Bruce Art, day notes, backups, and the
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.53.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.54.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -64,7 +64,7 @@ using it, and what actually caused it when a bug is being fixed.
 `boomerts/v1` endpoints) · `shortcode.php` (the frontend app, 4800 lines) · `head.php` ·
 `redirect.php` (`/stores/` redirects, `[bt_redirect_tab]`) · `woo.php` · `exchanges.php` ·
 `exchange-mail.php` · `exchanges-diag.php` · `omg-scanner.php` · `printavo.php` ·
-`chipply-barcoder.php` (hidden) · `chipply-scanner.php` · `routing.php` (`/employees/<tab>`
+`chipply-barcoder.php` (hidden) · `chipply-scanner.php` · `bruce-art.php` · `routing.php` (`/employees/<tab>`
 deep links) · `bt-admin.php` · `admin.php` · `updater.php`
 
 The plugin is a port of the old BT-Sched WPCode snippets (1 = DB, 2 = API, 3 = Frontend,
@@ -163,3 +163,14 @@ rather than load-bearing.
 - Compact, always. Dillon flags too much whitespace on every project.
 - Text sizing errs UP: table body 15px or larger, headers and badges 13px or larger.
 - Terse and results-first. Ship the actual deliverable, not narration.
+
+## Other > Bruce Art (0.54.0)
+
+`includes/bruce-art.php`, shortcode `[bt_bruce_art]`, tab id `bruceart`, slug `bruce-art`.
+Hosts the Bruce site iframe embed (`boomerts.sites.askbruce.ai`) behind the portal login.
+The SDK script is injected by `window.btpBruceArtLoad()`, which `btSwitchTab()` calls on
+open, so it never loads on other tabs and the iframe is built while visible (resizeToFit
+measures a real width). Container id is `btp-bruce-embed`, not Bruce's stock
+`bruce-embed`, to stay clear of the future catalog/quote Bruce embed. Site and SDK URLs are
+`BTP_BRUCE_SITE_URL` / `BTP_BRUCE_SDK_URL` constants with filters. Hiding the embed does not
+lock the Bruce site's own public URL.
