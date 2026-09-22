@@ -3,13 +3,13 @@
 Plugin Name: BT Portal
 Plugin URI: https://boomerts.com
 Description: Boomer T's employee portal — schedule board, online stores, quote, redirect, contacts, exchange tracking, OMG scanner, Chipply scanner, Bruce Art, day notes/capacity, backups, and the [bt_schedule] shortcode.
-Version: 0.54.1
+Version: 0.55.0
 Author: Duck and Rabbit Co.
 */
 
 if (!defined('ABSPATH')) exit;
 
-define('BTP_VERSION', '0.54.1');
+define('BTP_VERSION', '0.55.0');
 define('BTP_DIR', plugin_dir_path(__FILE__));
 define('BTP_URL', plugin_dir_url(__FILE__));
 define('BTP_FILE', __FILE__);
@@ -24,6 +24,7 @@ require_once BTP_DIR . 'includes/shortcode.php'; // [bt_schedule] frontend app (
 require_once BTP_DIR . 'includes/head.php';      // admin-bar hide + modal CSS on the portal page (Snippet 4)
 require_once BTP_DIR . 'includes/redirect.php';  // /stores/ redirect portal + [bt_redirect_tab] (Snippet 5)
 require_once BTP_DIR . 'includes/woo.php';       // WooCommerce order completion from Transfers job cards
+require_once BTP_DIR . 'includes/dtf-jobs.php';  // DTF Studio orders -> Transfers schedule cards
 require_once BTP_DIR . 'includes/exchanges.php'; // exchange order tracking (Other > Exchanges)
 require_once BTP_DIR . 'includes/exchange-mail.php';
 require_once BTP_DIR . 'includes/exchanges-diag.php'; // BT Portal > Exchanges Diag // customer emails on received / shipped

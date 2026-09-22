@@ -35,8 +35,8 @@ Steps:
 
 1. Edit files under `bt-portal/`.
 2. Bump the header `Version:` and `BTP_VERSION` together.
-3. `node --check` any touched JS. There is no PHP binary in the container, so brace-audit
-   touched PHP by hand.
+3. `node --check` any touched JS and `php -l` any touched PHP. The container does now carry
+   a PHP binary (8.4), so lint rather than brace-auditing by hand.
 4. Build both zips at the repo root: `bt-portal-X.Y.Z.zip` and plain `bt-portal.zip`.
    Zip the `bt-portal/` folder, not its contents, and exclude `.DS_Store`.
 5. Update `manifest.json`: `version`, `download_url` pointed at the **versioned** raw URL
@@ -62,7 +62,8 @@ using it, and what actually caused it when a bug is being fixed.
 `users.php` (portal logins, login gate, identity) · `vendors-seed.php` · `vendors.php` ·
 `db.php` (tables, migrations, nightly CSV and DB backup crons) · `rest.php` (all
 `boomerts/v1` endpoints) · `shortcode.php` (the frontend app, 4800 lines) · `head.php` ·
-`redirect.php` (`/stores/` redirects, `[bt_redirect_tab]`) · `woo.php` · `exchanges.php` ·
+`redirect.php` (`/stores/` redirects, `[bt_redirect_tab]`) · `woo.php` ·
+`dtf-jobs.php` (DTF Studio orders → Transfers cards) · `exchanges.php` ·
 `exchange-mail.php` · `exchanges-diag.php` · `omg-scanner.php` · `printavo.php` ·
 `chipply-barcoder.php` (hidden) · `chipply-scanner.php` · `bruce-art.php` · `routing.php` (`/employees/<tab>`
 deep links) · `bt-admin.php` · `admin.php` · `updater.php`
@@ -199,3 +200,25 @@ measures a real width). The SDK reads `embedContainer`, NOT `container`; without
 `bruce-embed`, to stay clear of the future catalog/quote Bruce embed. Site and SDK URLs are
 `BTP_BRUCE_SITE_URL` / `BTP_BRUCE_SDK_URL` constants with filters. Hiding the embed does not
 lock the Bruce site's own public URL.
+
+## DTF Studio orders on the board (0.55.0)
+
+`includes/dtf-jobs.php` writes the Transfers job card when a gang sheet order is paid for.
+Before that, a card only existed if somebody read the new order email and typed one.
+
+- Fires on `woocommerce_payment_complete` and the processing and completed status hooks.
+  An unpaid order (pending, on hold) is deliberately left off the board.
+- Recognises a DTF order from the gang sheet meta BT Transfers writes on the line items,
+  including the public `Sheet File` / `Sheet Size` keys older orders carry.
+- **Due date: today before 2pm, next day after, then rolled forward.** The roll is not
+  cosmetic. `btGetWeekDays()` builds five columns from Monday, so a card dated Saturday or
+  Sunday is in the table and on no column at all. Days at 0% capacity are skipped for the
+  same reason; a day at reduced capacity is still open and is used.
+- Dedup is two-sided: `_btp_dtf_job_id` on the order and a lookup by `woo_order_id` on
+  `bt_jobs`. The second is what covers an order whose meta a board restore dropped. All
+  three hooks usually fire for one order, so this matters.
+- Reuses `woo_order_id` (from `woo.php`) and `auto_kind` (from `store-schedule.php`), so
+  there is no migration. The insert is filtered through `SHOW COLUMNS` so an older table
+  still gets its card.
+- **Nothing here updates or deletes a card after it is written.** Once it is on the board it
+  belongs to production. A cancelled or refunded order leaves its card standing.
