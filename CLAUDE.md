@@ -151,6 +151,31 @@ the model to follow.
 - **Don't delete `exchanges-diag.php`.** It exists because the exchanges failure took nine
   releases to pin down.
 
+- **Synology Drive art paths (0.50.0, 0.50.1).** One Mac user works off site through
+  Synology Drive, so his art paths arrive as
+  `/Users/<n>/Library/CloudStorage/SynologyDrive-<connection>/...`. He only needs to
+  *save* links; production PCs open them. `BT_ART_SYNC_HOST` plus
+  `BT_ART_SYNC_FOLDER_TO_SHARE` convert them to UNC. The real server path is
+  `\\BoomerTs\BTServer\1 - ARTWORK\...`: the synced `1 - ARTWORK` folder sits **inside**
+  the BTServer share, it is not a share itself. Any other synced folder needs its own
+  map line; do not go back to guessing the top folder is the share.
+
+## Not in this repo (don't hunt for it)
+
+These live on the site as snippets, not in any GitHub repo:
+
+- **Customer exchange form, the exchange slip template, and the admin print slip.** One
+  WPCode snippet (Universal/PHP, shortcode `[bt_exchange_form]`, functions `bt_exchange_*`).
+  This plugin only **reads** the order meta that snippet writes (`_bt_exchange_items`,
+  `_bt_original_order`, `_bt_school_team`). Before locking down the legacy
+  `boomerts/v1` routes above, check whether that form calls any of them.
+- **Spirit wear lead page** (`[bt_spiritwear]`, boomerts.com/spiritwear) and its
+  **fundraiser clone** (`[bt_fundraiser]`). Code Snippets PHP. Fields `sw_*` / `fr_*`,
+  leads email orders@boomerts.com, Meta conversion fires on `?sw=thanks`.
+
+If a change is needed in one of these, say so and hand Dillon the snippet code to paste.
+Don't create a repo copy of it.
+
 ## Repo hygiene
 
 There are **38 versioned zips** committed at the repo root and the `.git` directory is
