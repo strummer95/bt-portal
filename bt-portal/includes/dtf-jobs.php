@@ -23,6 +23,22 @@
  *
  * Nothing here ever updates or deletes a card after it is written. Once the
  * card is on the board it belongs to production, not to this file.
+ *
+ * 0.55.1 — three holes that between them duplicated every hand-typed card:
+ *
+ *   1. It listened for woocommerce_order_status_completed. The portal's own
+ *      Complete Order button calls $order->update_status('completed'), which
+ *      fires that hook synchronously, before woo.php gets to stamp
+ *      woo_order_id on the card being completed. So finishing a job created
+ *      a fresh card for the same order. Completion is the end of a job and
+ *      is no longer a reason to schedule one.
+ *   2. It only recognised cards it had written itself, by woo_order_id or
+ *      _btp_dtf_job_id. A card somebody typed by hand carries neither, so an
+ *      order that was already on the board was invisible to it. It now also
+ *      matches an existing Transfers card on the order number.
+ *   3. It had no cutoff, so any order predating the feature got a card the
+ *      next time its status moved. It now ignores orders placed before the
+ *      release that introduced it.
  */
 if (!defined('ABSPATH')) exit;
 
@@ -32,6 +48,26 @@ const BTP_DTF_AUTO_KIND = 'dtf';
 
 /** Orders in before this hour go on today's column; after it, the next day. */
 const BTP_DTF_CUTOFF_HOUR = 14;   // 2pm, shop clock
+
+/** Orders placed before this feature went live are none of its business. */
+const BTP_DTF_SINCE_OPT = 'btp_dtf_jobs_since';
+
+/**
+ * The moment this file first ran on the site, as a UTC timestamp.
+ *
+ * Without it, an order from any time in the past lands on today's board the
+ * next time anything nudges its status — which is exactly what happened to
+ * the orders already sitting on the board when 0.55.0 shipped.
+ */
+function btp_dtf_since_ts() {
+    $ts = intval( get_option(BTP_DTF_SINCE_OPT, 0) );
+    if ( ! $ts ) {
+        $ts = time();
+        add_option(BTP_DTF_SINCE_OPT, $ts, '', false);
+    }
+    return $ts;
+}
+add_action('init', 'btp_dtf_since_ts');
 
 /* ============================================================
  * 1. IS THIS A DTF STUDIO ORDER?
@@ -155,17 +191,41 @@ function btp_dtf_schedule_order( $order_id ) {
     if ( $order->get_meta(BTP_DTF_JOB_META) ) return;      // already carded
     if ( ! btp_dtf_is_dtf_order($order) ) return;
 
+    // A job that is over, dead or refunded is not work to be scheduled. This
+    // also stands between the portal's Complete Order button and a new card,
+    // since the order reads completed by the time any hook of ours could run.
+    if ( in_array($order->get_status(), ['completed','cancelled','refunded','failed','trash'], true) ) return;
+
+    // Nothing from before this feature existed.
+    $created = $order->get_date_created();
+    if ( ! $created || $created->getTimestamp() < btp_dtf_since_ts() ) return;
+
     global $wpdb;
     $table = $wpdb->prefix . 'bt_jobs';
     $cols  = $wpdb->get_col("SHOW COLUMNS FROM $table", 0);
     if ( ! is_array($cols) || empty($cols) ) return;        // table not built yet
 
-    // Second guard: a card may already point at this order even when the
-    // order's own meta does not, which is what a board restore leaves behind.
+    // Is this order already on the board? Three ways it can be, and all three
+    // have to be checked or a second card appears beside the first.
+    //   a) a card this file wrote, which carries woo_order_id
+    //   b) a card somebody typed, which carries only the order number
+    // The order's own _btp_dtf_job_id covers the common case above; these
+    // cover a board restore that dropped the meta, and a hand-typed card that
+    // never had it to begin with.
     $existing = $wpdb->get_var( $wpdb->prepare(
         "SELECT id FROM $table WHERE woo_order_id=%d LIMIT 1", $order_id
     ) );
+
+    $num = ltrim( trim( (string) $order->get_order_number() ), '#' );
+    if ( ! $existing && $num !== '' ) {
+        $existing = $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM $table WHERE dept=%s AND (order_num=%s OR order_num=%s) LIMIT 1",
+            BTP_DTF_DEPT, $num, '#' . $num
+        ) );
+    }
+
     if ( $existing ) {
+        // Remember which card, so this order is never looked at again.
         $order->update_meta_data(BTP_DTF_JOB_META, intval($existing));
         $order->save_meta_data();
         return;
@@ -206,12 +266,20 @@ function btp_dtf_schedule_order( $order_id ) {
 
 /* ============================================================
  * 5. WHEN IT FIRES
- *    On payment, which is when the shop considers an order in. All three
- *    hooks are wired because different gateways reach that point by
- *    different routes; the guards above make the extra runs no-ops.
+ *    On payment, which is when the shop considers an order in. Both hooks
+ *    are wired because different gateways reach that point by different
+ *    routes; the guards above make the second run a no-op.
+ *
+ *    NOT on completion. woocommerce_order_status_completed was wired here
+ *    in 0.55.0 to catch a gateway that goes straight to completed, and it
+ *    cost three duplicate cards on the first day: the portal's own Complete
+ *    Order button runs update_status('completed'), which fired this and
+ *    built a new card for the job that had just been finished. An order
+ *    that reaches completed without ever passing through payment is an
+ *    order nobody needs to print.
+ *
  *    An order still pending or on hold has not been paid for and stays off
  *    the board until it is.
  * ============================================================ */
 add_action('woocommerce_payment_complete',          'btp_dtf_schedule_order', 20);
 add_action('woocommerce_order_status_processing',   'btp_dtf_schedule_order', 20);
-add_action('woocommerce_order_status_completed',    'btp_dtf_schedule_order', 20);

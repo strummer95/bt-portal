@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.54.1**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.55.1**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -214,9 +214,20 @@ Before that, a card only existed if somebody read the new order email and typed 
   cosmetic. `btGetWeekDays()` builds five columns from Monday, so a card dated Saturday or
   Sunday is in the table and on no column at all. Days at 0% capacity are skipped for the
   same reason; a day at reduced capacity is still open and is used.
-- Dedup is two-sided: `_btp_dtf_job_id` on the order and a lookup by `woo_order_id` on
-  `bt_jobs`. The second is what covers an order whose meta a board restore dropped. All
-  three hooks usually fire for one order, so this matters.
+- Dedup is three-sided and all three are load-bearing: `_btp_dtf_job_id` on the order, a
+  lookup by `woo_order_id`, and **a lookup by order number against any Transfers card**.
+  The last one is what sees a card somebody typed by hand, which carries neither of the
+  other two.
+- **Never hook `woocommerce_order_status_completed` here.** 0.55.0 did, and it duplicated
+  every hand-typed card on day one: `btp_woo_complete()` calls
+  `$order->update_status('completed')`, which fires that hook *synchronously, before*
+  `woo.php` stamps `woo_order_id` on the card being completed. So the Complete Order
+  button built a second card for the job it had just finished. Completion is the end of a
+  job, never a reason to schedule one. Completed, cancelled, refunded, failed and trashed
+  orders are all refused outright now.
+- `btp_dtf_jobs_since` (0.55.1) records when the feature first ran. An order created before
+  it is ignored forever, so a status change on an old order cannot drop it on today's
+  board — which is how the pre-0.55.0 backlog landed on the 23rd.
 - Reuses `woo_order_id` (from `woo.php`) and `auto_kind` (from `store-schedule.php`), so
   there is no migration. The insert is filtered through `SHOW COLUMNS` so an older table
   still gets its card.
