@@ -43,8 +43,8 @@ Steps:
    (`https://raw.githubusercontent.com/strummer95/bt-portal/main/bt-portal-X.Y.Z.zip`), and
    prepend a changelog entry.
 6. Commit and push to `main`.
-7. Dillon goes to **BT Portal → Status & Updates → Check for updates now**, then
-   **Plugins → Update Now**.
+7. Dillon goes to **BT Portal → Check for updates** (the panel at the bottom of the
+   BT Portal page), then **Plugins → Update Now**.
 
 Why versioned zips and not GitHub Releases: `uploads.github.com` is blocked from the
 container, so release assets cannot be attached. The updater reads `manifest.json` through
@@ -71,11 +71,15 @@ deep links) · `bt-admin.php` · `admin.php` · `updater.php`
 The plugin is a port of the old BT-Sched WPCode snippets (1 = DB, 2 = API, 3 = Frontend,
 4 = Adminbar), which is why the file comments reference snippet numbers.
 
-`includes/bt-admin.php` is **byte-identical across bt-portal, bt-catalog, bt-quote and
-bt-accounts**. Whichever plugin loads first defines `bt_admin_updates_panel()`; the rest
-skip it via `function_exists`. Do not fork it. If it changes, re-copy it into all four in
+`includes/bt-admin.php` is **byte-identical across bt-portal, bt-catalog, bt-quote,
+bt-accounts and bt-dtf**. Whichever plugin loads first defines `bt_admin_updates_panel()`; the rest
+skip it via `function_exists`. Do not fork it. If it changes, re-copy it into all five in
 the same release round. Anything plugin-specific goes above the panel, in that plugin's own
 code.
+
+**Where the update check lives is a fixed rule across the BT plugins:** the shared panel
+is the last thing on the plugin's own top-level admin page. Never a separate Updates
+submenu. BT Transfers was the one exception until its 0.7.5 and it is not coming back.
 
 ## Other > Accounts (0.51.0)
 
