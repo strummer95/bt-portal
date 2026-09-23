@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.55.1**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.55.2**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -229,6 +229,15 @@ Before that, a card only existed if somebody read the new order email and typed 
   button built a second card for the job it had just finished. Completion is the end of a
   job, never a reason to schedule one. Completed, cancelled, refunded, failed and trashed
   orders are all refused outright now.
+- **The cutoff runs on `BTP_DTF_TZ` (America/Chicago), not WordPress's timezone** (0.55.2).
+  This site's WP timezone is still UTC, the Lightsail default, so `current_time()` reads five
+  hours ahead of the shop: 2pm fired at 9am and everything ordered between 9am and 2pm local
+  went to the next day. Evening orders came out right by accident, because the UTC date had
+  already rolled forward while the hour still read early and the two errors cancelled, which
+  is why it surfaced only on a late-morning order. `btp_dtf_due_date_for($date, $hour)` holds
+  the rule and is pure, so it can be tested without a clock.
+- An order whose billing name is in `btp_dtf_inhouse_names` (Dillon Johnson) is carded as
+  **In House Transfers** (0.55.2); shop work should not carry an owner's name into production.
 - `btp_dtf_jobs_since` (0.55.1) records when the feature first ran. An order created before
   it is ignored forever, so a status change on an old order cannot drop it on today's
   board — which is how the pre-0.55.0 backlog landed on the 23rd.

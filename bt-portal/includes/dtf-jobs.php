@@ -49,6 +49,28 @@ const BTP_DTF_AUTO_KIND = 'dtf';
 /** Orders in before this hour go on today's column; after it, the next day. */
 const BTP_DTF_CUTOFF_HOUR = 14;   // 2pm, shop clock
 
+/**
+ * The shop's own clock.
+ *
+ * 0.55.1 read the cutoff off WordPress's timezone, and this site is still
+ * set to UTC, which is how Lightsail ships it. So "2pm" was firing at 9am in
+ * the shop, and an order placed at 11:41am went on tomorrow's column. Pinned
+ * here so the rule means 2pm where the shop is whatever that setting says,
+ * and it stays right if somebody corrects the setting later.
+ *
+ * Override with define('BTP_DTF_TZ', ...) or the btp_dtf_timezone filter.
+ */
+if ( ! defined('BTP_DTF_TZ') ) define('BTP_DTF_TZ', 'America/Chicago');
+
+function btp_dtf_timezone() {
+    $tz = apply_filters('btp_dtf_timezone', BTP_DTF_TZ);
+    try {
+        return new DateTimeZone($tz);
+    } catch ( Exception $e ) {
+        return new DateTimeZone('America/Chicago');
+    }
+}
+
 /** Orders placed before this feature went live are none of its business. */
 const BTP_DTF_SINCE_OPT = 'btp_dtf_jobs_since';
 
@@ -112,11 +134,32 @@ function btp_dtf_sheet_summary( $order ) {
     ];
 }
 
+/**
+ * Whose name goes on the card.
+ *
+ * An order the shop placed itself is shop work, not a customer's, so the
+ * card says so rather than carrying an owner's name through production.
+ * Add more names with the btp_dtf_inhouse_names filter.
+ */
+const BTP_DTF_INHOUSE_LABEL = 'In House Transfers';
+
+function btp_dtf_is_inhouse( $name ) {
+    $names = apply_filters('btp_dtf_inhouse_names', ['dillon johnson']);
+    $needle = strtolower( preg_replace('/\s+/', ' ', trim($name)) );
+    if ( $needle === '' ) return false;
+    foreach ( (array) $names as $n ) {
+        if ( $needle === strtolower( preg_replace('/\s+/', ' ', trim($n)) ) ) return true;
+    }
+    return false;
+}
+
 /** Billing name, falling back to the company and then the email. */
 function btp_dtf_customer_name( $order ) {
     $name = '';
     if ( method_exists($order, 'get_formatted_billing_full_name') )
         $name = trim( (string) $order->get_formatted_billing_full_name() );
+    if ( btp_dtf_is_inhouse($name) ) return BTP_DTF_INHOUSE_LABEL;
+
     if ( $name === '' && method_exists($order, 'get_billing_company') )
         $name = trim( (string) $order->get_billing_company() );
     if ( $name === '' && method_exists($order, 'get_billing_email') )
@@ -129,15 +172,25 @@ function btp_dtf_customer_name( $order ) {
  * ============================================================ */
 
 /**
- * Today if the order is in before the cutoff, otherwise the next day —
- * on the site's own clock, not the server's, so 2pm means 2pm in the shop.
+ * Today if the order is in before the cutoff, otherwise the next day, read
+ * off the shop's clock rather than the site's.
+ *
+ * The window this got wrong was 9am to 2pm in the shop, which is 2pm to 7pm
+ * UTC: those orders were read as past the cutoff and pushed to the next day.
+ * Evening orders happened to come out right, because under UTC the date had
+ * already rolled forward while the hour read as early, and the two errors
+ * cancelled. That is why this only showed up on a late-morning order.
  */
 function btp_dtf_due_date() {
-    $today = current_time('Y-m-d');
-    $hour  = intval( current_time('G') );
-    $date  = $hour < BTP_DTF_CUTOFF_HOUR
-        ? $today
-        : date('Y-m-d', strtotime($today . ' +1 day'));
+    $now = new DateTime('now', btp_dtf_timezone());
+    return btp_dtf_due_date_for( $now->format('Y-m-d'), intval($now->format('G')) );
+}
+
+/** The rule itself, given a local date and hour. Split out so it can be tested. */
+function btp_dtf_due_date_for( $local_date, $local_hour ) {
+    $date = $local_hour < BTP_DTF_CUTOFF_HOUR
+        ? $local_date
+        : date('Y-m-d', strtotime($local_date . ' +1 day'));
     return btp_dtf_next_working_day($date);
 }
 
