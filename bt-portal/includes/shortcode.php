@@ -950,14 +950,15 @@ add_shortcode( 'bt_schedule', function() {
 #bt-schedule-app .stores-panel { padding:16px 24px 24px 16px; }
 #bt-schedule-app .stores-table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:16px; table-layout:fixed; }
 #bt-schedule-app .stores-table th { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--gray-400); padding:8px 10px; text-align:left; background:var(--gray-100); border-bottom:2px solid var(--gray-200); overflow:hidden; white-space:nowrap; }
-#bt-schedule-app .stores-table th:nth-child(1) { width:20%; }
-#bt-schedule-app .stores-table th:nth-child(2) { width:7%; }
+#bt-schedule-app .stores-table th:nth-child(1) { width:17%; }
+#bt-schedule-app .stores-table th:nth-child(2) { width:6%; }
 #bt-schedule-app .stores-table th:nth-child(3) { width:7%; }
 #bt-schedule-app .stores-table th:nth-child(4) { width:7%; }
-#bt-schedule-app .stores-table th:nth-child(5) { width:11%; }
+#bt-schedule-app .stores-table th:nth-child(5) { width:8%; }
 #bt-schedule-app .stores-table th:nth-child(6) { width:11%; }
-#bt-schedule-app .stores-table th:nth-child(7) { width:27%; }
-#bt-schedule-app .stores-table th:nth-child(8) { width:7%; }
+#bt-schedule-app .stores-table th:nth-child(7) { width:16%; }
+#bt-schedule-app .stores-table th:nth-child(8) { width:23%; }
+#bt-schedule-app .stores-table th:nth-child(9) { width:5%; }
 #bt-schedule-app .stores-table td { padding:10px 10px; border-bottom:1px solid var(--gray-200); color:var(--navy-dark); vertical-align:middle; overflow:hidden; }
 #bt-schedule-app .stores-table tr:hover td { background:var(--gray-100); }
 #bt-schedule-app .stores-table .stores-cat-hdr:hover td { background:var(--navy-dark) !important; }
@@ -2520,7 +2521,7 @@ function btRenderStores() {
         <td>${fmtDate(store.openDate)}</td><td>${fmtDate(store.closeDate,'N/A')}</td>
         <td><span class="store-status-badge ${sCls}">${store.status}</span></td>
         <td><span class="store-status-badge" style="${fStyle}">${store.fulfillment||'—'}</span></td>
-        <td style="font-size:13px;line-height:1.35;">${store.contactName?`<span style="font-weight:600;color:#1a1f5e;display:block;font-size:14px;">${store.contactName}</span>`:''}${store.contactEmail?`<a href="mailto:${store.contactEmail}" onclick="event.stopPropagation()" style="color:#9ca3b8;font-size:12px;text-decoration:none;">${store.contactEmail}</a>`:(!store.contactName?'—':'')}</td>
+        <td style="font-size:13px;line-height:1.35;overflow-wrap:anywhere;">${store.contactName?`<span style="font-weight:600;color:#1a1f5e;display:block;font-size:14px;">${store.contactName}</span>`:''}${store.contactEmail?`<a href="mailto:${store.contactEmail}" onclick="event.stopPropagation()" style="color:#9ca3b8;font-size:12px;text-decoration:none;">${store.contactEmail}</a>`:(!store.contactName?'—':'')}</td>
         <td style="font-size:15px;color:#1a1f5e;line-height:1.4;">${store.notes||''}</td>
         <td>${store.link?`<span class="store-link-cell"><a href="${store.link}" class="store-link" target="_blank" onclick="event.stopPropagation()">VIEW</a><button type="button" class="store-copy-btn" title="Copy store URL" data-copy="${btAttr(store.link)}" onclick="btCopyStoreLink(event,this)">${BTP_COPY_ICON}</button></span>`:''}</td>`;
 
