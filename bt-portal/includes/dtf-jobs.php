@@ -139,22 +139,43 @@ function btp_dtf_sheet_summary( $order ) {
  *
  * An order the shop placed itself is shop work, not a customer's, so the
  * card says so rather than carrying an owner's name through production.
- * Add more names with the btp_dtf_inhouse_names filter.
+ * Recognised by billing email first (what Dillon orders under), then by
+ * billing name. Add more with the btp_dtf_inhouse_emails and
+ * btp_dtf_inhouse_names filters.
  */
 const BTP_DTF_INHOUSE_LABEL = 'In House Transfers';
 
-function btp_dtf_is_inhouse( $name ) {
-    $names = apply_filters('btp_dtf_inhouse_names', ['dillon johnson']);
-    $needle = strtolower( preg_replace('/\s+/', ' ', trim($name)) );
+function btp_dtf_norm( $s ) {
+    return strtolower( preg_replace('/\s+/', ' ', trim( (string) $s )) );
+}
+
+function btp_dtf_is_inhouse_email( $email ) {
+    $needle = btp_dtf_norm($email);
     if ( $needle === '' ) return false;
-    foreach ( (array) $names as $n ) {
-        if ( $needle === strtolower( preg_replace('/\s+/', ' ', trim($n)) ) ) return true;
-    }
+    $emails = apply_filters('btp_dtf_inhouse_emails', ['dillon@boomerts.com']);
+    foreach ( (array) $emails as $e ) if ( $needle === btp_dtf_norm($e) ) return true;
+    return false;
+}
+
+function btp_dtf_is_inhouse( $name ) {
+    $needle = btp_dtf_norm($name);
+    if ( $needle === '' ) return false;
+    $names = apply_filters('btp_dtf_inhouse_names', ['dillon johnson']);
+    foreach ( (array) $names as $n ) if ( $needle === btp_dtf_norm($n) ) return true;
     return false;
 }
 
 /** Billing name, falling back to the company and then the email. */
 function btp_dtf_customer_name( $order ) {
+    // Billing email, and the logged-in account's email in case billing differs.
+    $emails = [];
+    if ( method_exists($order, 'get_billing_email') ) $emails[] = $order->get_billing_email();
+    if ( method_exists($order, 'get_user') ) {
+        $u = $order->get_user();
+        if ( $u && ! empty($u->user_email) ) $emails[] = $u->user_email;
+    }
+    foreach ( $emails as $e ) if ( btp_dtf_is_inhouse_email($e) ) return BTP_DTF_INHOUSE_LABEL;
+
     $name = '';
     if ( method_exists($order, 'get_formatted_billing_full_name') )
         $name = trim( (string) $order->get_formatted_billing_full_name() );
@@ -289,7 +310,10 @@ function btp_dtf_schedule_order( $order_id ) {
     $row = [
         'order_num'    => (string) $order->get_order_number(),
         'customer'     => btp_dtf_customer_name($order),
-        'qty'          => $sum['pieces'],
+        // No piece count on DTF cards: the sheet sizes in notes are what the
+        // press needs, and a card at qty 0 hides the Qty row. Transfers does
+        // not feed any capacity counter, so nothing else reads this.
+        'qty'          => 0,
         'location'     => '',
         'dept'         => BTP_DTF_DEPT,
         'status'       => 'None',
