@@ -18,6 +18,7 @@ add_action( 'rest_api_init', function() {
     register_rest_route( $ns, '/jobs/(?P<id>\d+)/status', ['methods'=>'POST','callback'=>'btp_update_job_status','permission_callback'=>'__return_true']);
     register_rest_route( $ns, '/jobs/reorder', ['methods'=>'POST','callback'=>'btp_reorder_jobs','permission_callback'=>'__return_true']);
     register_rest_route( $ns, '/jobs/sort', ['methods'=>'POST','callback'=>'btp_sort_jobs','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/jobs/dtf-match', ['methods'=>'GET','callback'=>'btp_dtf_match','permission_callback'=>'btp_rest_can_access']);
 
     // ── STORES ───────────────────────────────────────────────────────────
     register_rest_route( $ns, '/stores', ['methods'=>'GET','callback'=>'btp_get_stores','permission_callback'=>'__return_true']);
@@ -68,6 +69,28 @@ function btp_get_jobs( $request ) {
         $jobs = $wpdb->get_results("SELECT * FROM $table ORDER BY due_date ASC, sort_order ASC, id ASC");
     }
     return rest_ensure_response($jobs);
+}
+
+/**
+ * DTF Studio cards already on the board under an order number (0.55.5).
+ *
+ * The New Job window asks before saving, so a gang sheet order that carded
+ * itself doesn't get a second, hand-typed card. Only auto_kind 'dtf' cards
+ * count: Printavo jobs go on several days on purpose and must save silently.
+ * Reads the whole table, not the loaded week, since the DTF card can sit on
+ * another week from the one on screen.
+ */
+function btp_dtf_match( $request ) {
+    global $wpdb; $table = $wpdb->prefix.'bt_jobs';
+    $num = ltrim( trim( sanitize_text_field( (string) $request->get_param('order_num') ) ), '#' );
+    if ( $num === '' ) return rest_ensure_response([]);
+    $cols = $wpdb->get_col("SHOW COLUMNS FROM $table", 0);
+    if ( ! is_array($cols) || ! in_array('auto_kind', $cols, true) ) return rest_ensure_response([]);
+    $rows = $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, order_num, customer, due_date FROM $table WHERE auto_kind=%s AND (order_num=%s OR order_num=%s) ORDER BY due_date ASC LIMIT 5",
+        'dtf', $num, '#'.$num
+    ) );
+    return rest_ensure_response( $rows ?: [] );
 }
 
 function btp_create_job( $request ) {

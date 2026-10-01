@@ -2865,6 +2865,22 @@ function btSelectStatus(val) {
   document.getElementById('btFStatus').value = val;
 }
 
+/* A DTF Studio order cards itself when it's paid for, so a hand-typed card for
+   the same order number is almost always a duplicate. Ask first. Only DTF
+   Studio cards trigger this: Printavo jobs go on several days on purpose.
+   If the lookup fails, save as normal rather than block the job. */
+async function btConfirmDtfDuplicate(orderNum) {
+  let hits = [];
+  try { hits = await btFetch('/jobs/dtf-match?order_num=' + encodeURIComponent(orderNum)); } catch(e) { return true; }
+  if (!Array.isArray(hits) || !hits.length) return true;
+  const where = hits.map(h => {
+    const d = new Date((h.due_date||'') + 'T12:00:00');
+    const day = isNaN(d) ? 'no date' : d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+    return '  ' + (h.customer || 'DTF Studio order') + ' on ' + day;
+  }).join('\n');
+  return confirm('#' + orderNum.replace(/^#/, '') + ' is already on the board as a DTF Studio card:\n\n' + where + '\n\nAdd another card anyway?');
+}
+
 async function btSaveJob() {
   const lineItems = btGetLineItems();
   const totalQty = lineItems.reduce((sum, li) => sum + (parseInt(li.qty)||0), 0);
@@ -2891,6 +2907,7 @@ async function btSaveJob() {
   if (!payload.customer || !payload.dept || !payload.status) {
     alert('Please fill in Customer, Department, and Status.'); return;
   }
+  if (!btActiveJob && payload.order_num && !(await btConfirmDtfDuplicate(payload.order_num))) return;
   btSaving(true);
   let btSaveOk = false;
   let created = null;

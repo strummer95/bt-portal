@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.55.2**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.55.5**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -246,3 +246,9 @@ Before that, a card only existed if somebody read the new order email and typed 
   still gets its card.
 - **Nothing here updates or deletes a card after it is written.** Once it is on the board it
   belongs to production. A cancelled or refunded order leaves its card standing.
+- **Duplicate warning on hand-typed cards (0.55.5).** Saving a *new* job whose order number
+  matches an `auto_kind = 'dtf'` card asks first (`btConfirmDtfDuplicate()` in
+  `shortcode.php`, `GET /jobs/dtf-match` in `rest.php`, held to `btp_rest_can_access`). It
+  searches the whole table, not the loaded week. **DTF cards only, on purpose:** Printavo
+  jobs go on several days and Dillon does not want a popup for those. A failed lookup saves
+  without asking. Edits never ask.
