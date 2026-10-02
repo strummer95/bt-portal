@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.56.1**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.56.2**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -265,3 +265,13 @@ only if something changed. **Go to** reuses `btSearchJump()`. `btGoToOverdue()` 
 and were inflating the red bar. The list groups them last under "No due date" with Delete (no Done / Go to).
 `btp_valid_due_date()` in `rest.php` now refuses POST and full PUT `/jobs` without a real Y-m-d date, and
 the New Job form requires Due Date.
+
+0.56.2, cause confirmed on a local WordPress + MariaDB running 0.55.5: any POST `/jobs` with no JSON body
+(empty, form-encoded, or a plain GET with `?_method=POST`) inserted an all-blank `0000-00-00` card, and a
+full PUT with no body wiped a real card to the same blank (`updated_at` later than `created_at`). The portal
+UI cannot produce either (customer + dept required). Refused writes are logged to option
+`btp_rejected_job_writes` (last 50: time, IP, user agent, referer, login). `GET /jobs/blank-history`
+(`btp_rest_can_access`) looks each no-date card up by id in backups taken since the last restore (a restore
+re-ids every card) and returns the newest non-blank version; the list offers Restore (full PUT of those
+fields). Bulk delete covers only cards the backups show were always blank. The routes are still open to
+anyone for valid writes; locking them down is the remaining fix.

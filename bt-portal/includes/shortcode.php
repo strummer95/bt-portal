@@ -965,6 +965,11 @@ add_shortcode( 'bt_schedule', function() {
 #btpOverdueModal select { border:1.5px solid #e8eaf0; border-radius:5px; padding:4px 6px; font-family:'Barlow',sans-serif; font-size:15px; color:#0f1240; background:#fff; border-left-width:6px; width:100%; }
 #btpOverdueModal td.btp-od-act { white-space:nowrap; text-align:right; }
 #btpOverdueModal td.btp-od-act .btp-od-btn { padding:5px 9px; }
+#btpOverdueModal td.btp-od-histcell { white-space:normal; line-height:1.35; }
+#btpOverdueModal .btp-od-hist { font-size:14px; color:#5a6380; }
+#btpOverdueModal .btp-od-hist.real { color:#b71c1c; font-weight:700; }
+#btpOverdueModal .btp-od-hist em { font-weight:400; color:#5a6380; }
+#btpOverdueModal td.btp-od-why { background:#fff5f6; color:#5a1020; font-size:14px; line-height:1.4; padding:6px 10px; }
 #btpOverdueModal .btp-od-empty { padding:30px; text-align:center; font-size:16px; color:#5a6380; }
 
 #bt-schedule-app .job-card.is-completed .card-order,
@@ -3898,7 +3903,48 @@ async function btOpenOverdueList() {
     list.innerHTML = '<div class="btp-od-empty">Could not load jobs. Close this and try again.</div>';
     return;
   }
+  btOdHist = null;
   btOdRender();
+  if (btOdJobs.some(j => j.noDate)) {
+    try { btOdHist = await btFetch('/jobs/blank-history'); } catch(e) { btOdHist = {error: true}; }
+    btOdRender();
+  }
+}
+
+/* What a no-date card used to be, from the nightly backups (0.56.2). */
+let btOdHist = null;
+function btOdWhen(s) {
+  if (!s) return '';
+  const d = new Date(String(s).replace(' ', 'T') + 'Z');
+  return isNaN(d) ? s : d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+}
+function btOdHistFor(id) {
+  return btOdHist && btOdHist.cards ? btOdHist.cards.find(c => c.id == id) : null;
+}
+function btOdHistText(j) {
+  if (!btOdHist) return '<span class="btp-od-hist">Checking backups\u2026</span>';
+  if (btOdHist.error) return '<span class="btp-od-hist">Could not read the backups.</span>';
+  const h = btOdHistFor(j.id);
+  if (!h) return '';
+  if (h.was) {
+    const w = h.was.job;
+    return '<span class="btp-od-hist real">Was a real job: ' + btEscHtml([w.order_num, w.customer, w.dept, w.due_date].filter(Boolean).join(' \u00b7 ')) +
+      ' <em>(' + btEscHtml(h.was.backup) + ')</em></span>';
+  }
+  return '<span class="btp-od-hist">Blank since it was made ' + btEscHtml(btOdWhen(h.created_at)) +
+    (h.in_backups ? ', and blank in every backup' : (btOdHist.backups_read ? ', not in any backup' : '')) + '</span>';
+}
+
+async function btOdRestore(id) {
+  const h = btOdHistFor(id);
+  if (!h || !h.was) return;
+  const w = h.was.job;
+  if (!confirm('Put this card back the way it was in ' + h.was.backup + '?\n\n' + [w.order_num, w.customer, w.dept, w.due_date].filter(Boolean).join(' \u00b7 '))) return;
+  try {
+    await btFetch('/jobs/' + id, 'PUT', w);
+    await btOpenOverdueList();
+    btOdChanged = true;   // after the reload, which resets it
+  } catch(e) { alert('Could not restore that card. Try again.'); }
 }
 
 function btOdRender() {
@@ -3908,10 +3954,11 @@ function btOdRender() {
     btOdUpdateCount(); return;
   }
   const color = st => (BTP_OD_STATUSES.find(x => x[0] === st) || ['', '#ccc'])[1];
-  let html = '<table><colgroup><col style="width:30px"><col style="width:120px"><col><col style="width:112px"><col style="width:96px"><col style="width:200px"><col style="width:160px"></colgroup>' +
+  let html = '<table><colgroup><col style="width:30px"><col style="width:120px"><col><col style="width:112px"><col style="width:96px"><col style="width:200px"><col style="width:190px"></colgroup>' +
     '<thead><tr><th></th><th>Order</th><th>Customer</th><th>Dept</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>';
   let lastWeek = '';
-  const undated = btOdJobs.filter(j => j.noDate && j.status !== BTP_OD_DONE).length;
+  const undated = btOdJunk().length;
+  const rej = (btOdHist && btOdHist.rejected) || [];
   btOdJobs.forEach(j => {
     const due = j.noDate ? null : new Date(j.dueDate + 'T12:00:00');
     const wk  = j.noDate ? 'nodate' : btOdYmd(btOdMonday(due));
@@ -3919,7 +3966,10 @@ function btOdRender() {
       lastWeek = wk;
       if (j.noDate) {
         html += '<tr class="btp-od-week nodate"><td colspan="7">No due date \u00b7 these never show on the board' +
-          (undated ? '<button class="btp-od-btn del" onclick="btOdDeleteUndated()">Delete these ' + undated + '</button>' : '') + '</td></tr>';
+          (undated ? '<button class="btp-od-btn del" onclick="btOdDeleteUndated()">Delete the ' + undated + ' blank ones</button>' : '') + '</td></tr>' +
+          '<tr><td colspan="7" class="btp-od-why">An empty save from anywhere used to make one of these, and an empty edit could wipe a real card into one. Both are refused since 0.56.1. ' +
+          (rej.length ? 'Refused since then: <strong>' + rej.length + (rej.length >= 50 ? '+' : '') + '</strong>, last ' + btEscHtml(btOdWhen(rej[0].at)) +
+             (rej[0].user ? ' by ' + btEscHtml(rej[0].user) : ' (not signed in)') + (rej[0].agent ? ' \u00b7 ' + btEscHtml(rej[0].agent.slice(0, 70)) : '') : 'None refused yet.') + '</td></tr>';
       } else {
         const m = new Date(wk + 'T12:00:00');
         html += '<tr class="btp-od-week"><td colspan="7">Week of ' + m.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</td></tr>';
@@ -3930,15 +3980,18 @@ function btOdRender() {
       '<option value="' + btEscHtml(v) + '"' + (v === j.status ? ' selected' : '') + '>' + btEscHtml(v.replace('/', ' / ')) + '</option>').join('');
     html += '<tr data-id="' + j.id + '"' + (done ? ' class="btp-od-gone"' : '') + '>' +
       '<td><input type="checkbox" class="btp-od-chk" value="' + j.id + '"' + (done ? ' disabled' : '') + ' onchange="btOdUpdateCount()"></td>' +
-      '<td class="btp-od-order">' + btEscHtml(j.orderNum || '\u2014') + '</td>' +
-      '<td class="btp-od-cust" title="' + btEscHtml(j.customer) + '">' + btEscHtml(j.customer) + '</td>' +
-      '<td><span class="btp-od-dept">' + btEscHtml(j.dept || '\u2014') + '</span></td>' +
+      (j.noDate
+        ? '<td class="btp-od-histcell" colspan="3">' + btOdHistText(j) + '</td>'
+        : '<td class="btp-od-order">' + btEscHtml(j.orderNum || '\u2014') + '</td>' +
+          '<td class="btp-od-cust" title="' + btEscHtml(j.customer) + '">' + btEscHtml(j.customer) + '</td>' +
+          '<td><span class="btp-od-dept">' + btEscHtml(j.dept || '\u2014') + '</span></td>') +
       '<td class="btp-od-due">' + (due ? due.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) : 'No date') + '</td>' +
       '<td><select style="border-left-color:' + color(j.status) + '" onchange="btOdSetStatus(' + j.id + ', this.value)">' + opts + '</select></td>' +
       '<td class="btp-od-act">' +
-        (done || j.noDate ? '' : '<button class="btp-od-btn done" onclick="btOdSetStatus(' + j.id + ', BTP_OD_DONE)">&#10003; Done</button> ') +
+        (done || j.noDate ? '' : '<button class="btp-od-btn done" onclick="btOdSetStatus(' + j.id + ', BTP_OD_DONE)">&#10003; Complete</button> ') +
         (j.noDate
-          ? '<button class="btp-od-btn del" onclick="btOdDelete([' + j.id + '])">Delete</button>'
+          ? ((btOdHistFor(j.id) || {}).was ? '<button class="btp-od-btn done" onclick="btOdRestore(' + j.id + ')">Restore</button> ' : '') +
+            '<button class="btp-od-btn del" onclick="btOdDelete([' + j.id + '])">Delete</button>'
           : '<button class="btp-od-btn ghost" onclick="btOdJump(' + j.id + ')">Go to &#8594;</button>') +
       '</td></tr>';
   });
@@ -3996,15 +4049,22 @@ async function btOdCompleteSelected() {
   if (failed) alert(failed + ' job' + (failed > 1 ? 's' : '') + ' did not save. They are still open in the list; try again.');
 }
 
+function btOdJunk() {
+  // Only cards the backups show were never anything. Until the backups have
+  // been read, nothing counts as junk.
+  if (!btOdHist || !btOdHist.cards) return [];
+  return btOdJobs.filter(j => j.noDate && j.status !== BTP_OD_DONE && !j.orderNum && !j.customer &&
+    btOdHistFor(j.id) && !btOdHistFor(j.id).was);
+}
 function btOdDeleteUndated() {
-  btOdDelete(btOdJobs.filter(j => j.noDate && j.status !== BTP_OD_DONE).map(j => j.id));
+  btOdDelete(btOdJunk().map(j => j.id));
 }
 
 async function btOdDelete(ids) {
   if (!ids.length) return;
-  const blank = ids.every(id => { const j = btOdJobs.find(x => x.id == id); return j && !j.orderNum && !j.customer; });
+  const blank = ids.every(id => { const j = btOdJobs.find(x => x.id == id); return j && !j.orderNum && !j.customer && !(btOdHistFor(id) || {}).was; });
   if (!confirm('Delete ' + ids.length + ' card' + (ids.length > 1 ? 's' : '') + ' with no due date?' +
-      (blank ? '' : ' Some have an order number or customer on them.') + ' This cannot be undone.')) return;
+      (blank ? '' : ' This one was a real job; Restore puts it back instead.') + ' This cannot be undone.')) return;
   let failed = 0;
   for (const id of ids) {
     try {

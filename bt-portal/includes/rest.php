@@ -18,6 +18,7 @@ add_action( 'rest_api_init', function() {
     register_rest_route( $ns, '/jobs/(?P<id>\d+)/status', ['methods'=>'POST','callback'=>'btp_update_job_status','permission_callback'=>'__return_true']);
     register_rest_route( $ns, '/jobs/reorder', ['methods'=>'POST','callback'=>'btp_reorder_jobs','permission_callback'=>'__return_true']);
     register_rest_route( $ns, '/jobs/sort', ['methods'=>'POST','callback'=>'btp_sort_jobs','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/jobs/blank-history', ['methods'=>'GET','callback'=>'btp_blank_history','permission_callback'=>'btp_rest_can_access']);
     register_rest_route( $ns, '/jobs/dtf-match', ['methods'=>'GET','callback'=>'btp_dtf_match','permission_callback'=>'btp_rest_can_access']);
 
     // ── STORES ───────────────────────────────────────────────────────────
@@ -105,10 +106,87 @@ function btp_valid_due_date( $d ) {
     return checkdate( (int) $m[2], (int) $m[3], (int) $m[1] );
 }
 
+/**
+ * Remember who sent a job save with no due date (0.56.2). Every blank card on
+ * the board came from one of these: before 0.56.1 an empty POST /jobs made a
+ * new blank card, and an empty full PUT wiped a real one blank, from anywhere,
+ * no login needed. They are refused now; this keeps the last 50 so the
+ * previous-weeks list can show what is still trying.
+ */
+function btp_note_rejected_job_write( $request ) {
+    $log = get_option('btp_rejected_job_writes', []);
+    if ( ! is_array($log) ) $log = [];
+    $u = wp_get_current_user();
+    array_unshift($log, [
+        'at'     => current_time('mysql', true),
+        'method' => $request->get_method(),
+        'route'  => $request->get_route(),
+        'ip'     => sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' ),
+        'agent'  => substr( sanitize_text_field( $_SERVER['HTTP_USER_AGENT'] ?? '' ), 0, 200 ),
+        'ref'    => substr( esc_url_raw( $_SERVER['HTTP_REFERER'] ?? '' ), 0, 200 ),
+        'user'   => ( $u && $u->ID ) ? $u->user_login : '',
+    ]);
+    update_option('btp_rejected_job_writes', array_slice($log, 0, 50), false);
+}
+
+/**
+ * What each no-date card used to be (0.56.2), from the backups. A card born
+ * blank is junk; one that was wiped blank by an empty edit still has its old
+ * contents in an earlier nightly backup. Only backups taken since the last
+ * restore are read, because a restore gives every card a new id.
+ */
+function btp_blank_history( $request ) {
+    global $wpdb; $jobs = $wpdb->prefix.'bt_jobs'; $bk = $wpdb->prefix.'bt_backups';
+    $blank = $wpdb->get_results("SELECT * FROM $jobs WHERE due_date < '1000-01-01' OR due_date IS NULL ORDER BY id ASC", ARRAY_A);
+    $out = ['cards' => [], 'backups_read' => 0, 'oldest_backup' => '', 'rejected' => get_option('btp_rejected_job_writes', [])];
+    if ( ! $blank ) return rest_ensure_response($out);
+
+    $since = $wpdb->get_var("SELECT MAX(created_at) FROM $bk WHERE type='pre_restore'");
+    $rows  = $since
+        ? $wpdb->get_results($wpdb->prepare("SELECT id, label, created_at FROM $bk WHERE created_at > %s ORDER BY created_at DESC", $since))
+        : $wpdb->get_results("SELECT id, label, created_at FROM $bk ORDER BY created_at DESC");
+
+    $want = [];
+    foreach ($blank as $b) $want[(int) $b['id']] = null;
+    $seen = [];
+    foreach ( (array) $rows as $r ) {
+        $snap = json_decode( (string) $wpdb->get_var($wpdb->prepare("SELECT snapshot FROM $bk WHERE id=%d", $r->id)), true );
+        if ( ! is_array($snap) ) continue;
+        $out['backups_read']++;
+        $out['oldest_backup'] = $r->label;
+        foreach ( $snap['jobs'] ?? [] as $j ) {
+            $id = (int) ($j['id'] ?? 0);
+            if ( ! array_key_exists($id, $want) ) continue;
+            $seen[$id] = true;
+            if ( $want[$id] !== null ) continue;   // newest real version already found
+            $real = trim((string)($j['order_num'] ?? '')) !== '' || trim((string)($j['customer'] ?? '')) !== ''
+                 || btp_valid_due_date($j['due_date'] ?? '');
+            if ( $real ) {
+                $want[$id] = [
+                    'backup' => $r->label,
+                    'job'    => array_intersect_key($j, array_flip(['order_num','customer','qty','location','dept','status','due_date','art_link','notes','garment_type','caution'])),
+                ];
+            }
+        }
+        unset($snap);
+    }
+    foreach ($blank as $b) {
+        $id = (int) $b['id'];
+        $out['cards'][] = [
+            'id'         => $id,
+            'created_at' => $b['created_at'] ?? '',
+            'updated_at' => $b['updated_at'] ?? '',
+            'in_backups' => !empty($seen[$id]),
+            'was'        => $want[$id],
+        ];
+    }
+    return rest_ensure_response($out);
+}
+
 function btp_create_job( $request ) {
     global $wpdb; $table = $wpdb->prefix.'bt_jobs';
     $p = $request->get_json_params();
-    if ( ! btp_valid_due_date( $p['due_date'] ?? '' ) ) return new WP_Error('no_due_date','A job needs a due date.',['status'=>400]);
+    if ( ! btp_valid_due_date( $p['due_date'] ?? '' ) ) { btp_note_rejected_job_write($request); return new WP_Error('no_due_date','A job needs a due date.',['status'=>400]); }
     $result = $wpdb->insert($table,[
         'order_num'    => sanitize_text_field($p['order_num']??''),
         'customer'     => sanitize_text_field($p['customer']??''),
@@ -141,7 +219,7 @@ function btp_update_job( $request ) {
         if ( !empty($fields) ) $wpdb->update($table, $fields, ['id'=>$id]);
         return rest_ensure_response($wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d",$id)));
     }
-    if ( ! btp_valid_due_date( $p['due_date'] ?? '' ) ) return new WP_Error('no_due_date','A job needs a due date.',['status'=>400]);
+    if ( ! btp_valid_due_date( $p['due_date'] ?? '' ) ) { btp_note_rejected_job_write($request); return new WP_Error('no_due_date','A job needs a due date.',['status'=>400]); }
     $result = $wpdb->update($table,[
         'order_num'    => sanitize_text_field($p['order_num']??''),
         'customer'     => sanitize_text_field($p['customer']??''),
