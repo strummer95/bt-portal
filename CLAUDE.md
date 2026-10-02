@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.56.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.56.1**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -260,3 +260,8 @@ The red "jobs from previous weeks need attention" bar opens `#btpOverdueModal` (
 Monday and not Complete/Notify Customer. Status saves go through the existing `POST /jobs/<id>/status`
 one at a time (bulk included). Finished rows stay struck through until close; closing refreshes the week
 only if something changed. **Go to** reuses `btSearchJump()`. `btGoToOverdue()` is now unused but kept.
+
+0.56.1: cards with a blank due date are stored as `0000-00-00` (NOT NULL date column), sit on no week,
+and were inflating the red bar. The list groups them last under "No due date" with Delete (no Done / Go to).
+`btp_valid_due_date()` in `rest.php` now refuses POST and full PUT `/jobs` without a real Y-m-d date, and
+the New Job form requires Due Date.

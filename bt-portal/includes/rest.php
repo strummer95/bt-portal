@@ -93,9 +93,22 @@ function btp_dtf_match( $request ) {
     return rest_ensure_response( $rows ?: [] );
 }
 
+/**
+ * A card needs a real due date (0.56.1). due_date is a NOT NULL date column, so
+ * a blank one is stored as 0000-00-00: the card lands on no week of the board,
+ * nobody can see it, and it only ever shows up as a blank line in the
+ * previous-weeks count. Refuse it instead.
+ */
+function btp_valid_due_date( $d ) {
+    $d = (string) $d;
+    if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m ) ) return false;
+    return checkdate( (int) $m[2], (int) $m[3], (int) $m[1] );
+}
+
 function btp_create_job( $request ) {
     global $wpdb; $table = $wpdb->prefix.'bt_jobs';
     $p = $request->get_json_params();
+    if ( ! btp_valid_due_date( $p['due_date'] ?? '' ) ) return new WP_Error('no_due_date','A job needs a due date.',['status'=>400]);
     $result = $wpdb->insert($table,[
         'order_num'    => sanitize_text_field($p['order_num']??''),
         'customer'     => sanitize_text_field($p['customer']??''),
@@ -128,6 +141,7 @@ function btp_update_job( $request ) {
         if ( !empty($fields) ) $wpdb->update($table, $fields, ['id'=>$id]);
         return rest_ensure_response($wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id=%d",$id)));
     }
+    if ( ! btp_valid_due_date( $p['due_date'] ?? '' ) ) return new WP_Error('no_due_date','A job needs a due date.',['status'=>400]);
     $result = $wpdb->update($table,[
         'order_num'    => sanitize_text_field($p['order_num']??''),
         'customer'     => sanitize_text_field($p['customer']??''),
