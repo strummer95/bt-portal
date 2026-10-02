@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.55.5**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.56.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -252,3 +252,11 @@ Before that, a card only existed if somebody read the new order email and typed 
   searches the whole table, not the loaded week. **DTF cards only, on purpose:** Printavo
   jobs go on several days and Dillon does not want a popup for those. A failed lookup saves
   without asking. Edits never ask.
+
+## Overdue list (0.56.0)
+
+The red "jobs from previous weeks need attention" bar opens `#btpOverdueModal` (`btOpenOverdueList()` in
+`shortcode.php`) instead of jumping to the oldest week. Same filter as `btCheckOverdue()`: due before this
+Monday and not Complete/Notify Customer. Status saves go through the existing `POST /jobs/<id>/status`
+one at a time (bulk included). Finished rows stay struck through until close; closing refreshes the week
+only if something changed. **Go to** reuses `btSearchJump()`. `btGoToOverdue()` is now unused but kept.

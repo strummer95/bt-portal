@@ -936,6 +936,32 @@ add_shortcode( 'bt_schedule', function() {
 #btOverdueBar:hover { background:#c62828; }
 #btOverdueBar .overdue-dismiss { margin-left:auto; font-size:12px; opacity:.7; border:1px solid rgba(255,255,255,.4); padding:2px 8px; border-radius:3px; }
 
+/* ── OVERDUE LIST (0.56.0) ── */
+#btpOverdueModal .bt-modal-wrap { max-width:960px; }
+#btpOverdueModal .btp-od-tools { display:flex; align-items:center; gap:10px; padding:10px 20px; border-bottom:1px solid #e8eaf0; font-family:'Barlow',sans-serif; font-size:15px; color:#0f1240; flex-wrap:wrap; }
+#btpOverdueModal .btp-od-tools label { display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; }
+#btpOverdueModal .btp-od-tools .btp-od-count { margin-left:auto; color:#5a6380; font-size:14px; }
+#btpOverdueModal .btp-od-btn { background:#0f1240; color:#fff; border:none; padding:6px 12px; border-radius:5px; font-family:'Oswald',sans-serif; font-size:14px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; white-space:nowrap; }
+#btpOverdueModal .btp-od-btn:hover { background:#e91e8c; }
+#btpOverdueModal .btp-od-btn:disabled { opacity:.4; cursor:default; background:#0f1240; }
+#btpOverdueModal .btp-od-btn.ghost { background:#f4f5f9; color:#0f1240; }
+#btpOverdueModal .btp-od-btn.ghost:hover { background:#e8eaf0; }
+#btpOverdueModal .btp-od-btn.done { background:#2E7D32; }
+#btpOverdueModal .btp-od-btn.done:hover { background:#1b5e20; }
+#btpOverdueModal .btp-od-list { max-height:65vh; overflow-y:auto; }
+#btpOverdueModal table { width:100%; border-collapse:collapse; font-family:'Barlow',sans-serif; font-size:15px; color:#0f1240; }
+#btpOverdueModal th { position:sticky; top:0; background:#f4f5f9; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#5a6380; text-align:left; padding:6px 8px; z-index:1; }
+#btpOverdueModal td { padding:5px 8px; border-top:1px solid #eef0f5; vertical-align:middle; }
+#btpOverdueModal tr.btp-od-week td { background:#0f1240; color:#fff; font-family:'Oswald',sans-serif; font-size:13px; letter-spacing:.08em; text-transform:uppercase; padding:4px 8px; }
+#btpOverdueModal tr.btp-od-gone td { opacity:.35; text-decoration:line-through; }
+#btpOverdueModal td.btp-od-order { font-weight:700; white-space:nowrap; }
+#btpOverdueModal td.btp-od-cust { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#btpOverdueModal td.btp-od-due { white-space:nowrap; }
+#btpOverdueModal .btp-od-dept { display:inline-block; padding:2px 6px; border-radius:3px; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; background:#eef0f5; white-space:nowrap; }
+#btpOverdueModal select { border:1.5px solid #e8eaf0; border-radius:5px; padding:4px 6px; font-family:'Barlow',sans-serif; font-size:15px; color:#0f1240; background:#fff; border-left-width:6px; }
+#btpOverdueModal td.btp-od-act { white-space:nowrap; text-align:right; }
+#btpOverdueModal .btp-od-empty { padding:30px; text-align:center; font-size:16px; color:#5a6380; }
+
 #bt-schedule-app .job-card.is-completed .card-order,
 #bt-schedule-app .job-card.is-completed .card-customer { text-decoration:line-through; color:#9ca3b8 !important; }
 #bt-schedule-app .job-card.is-completed .card-dept-bar { filter:saturate(0.3); }
@@ -1251,7 +1277,7 @@ add_shortcode( 'bt_schedule', function() {
 <!-- SCHEDULE TAB -->
 <div id="bt-tab-schedule" class="tab-content active">
   <div style="height:15px;background:var(--white);"></div>
-  <div id="btOverdueBar" onclick="btGoToOverdue()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="btOverdueText" style="flex:1;text-align:center;">0 jobs from previous weeks need attention</span><span class="overdue-dismiss">VIEW →</span></div>
+  <div id="btOverdueBar" onclick="btOpenOverdueList()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="btOverdueText" style="flex:1;text-align:center;">0 jobs from previous weeks need attention</span><span class="overdue-dismiss">VIEW LIST →</span></div>
   <div class="board" id="btBoard">
     <div style="padding:40px;text-align:center;color:#9ca3b8;width:100%;">Loading schedule...</div>
   </div>
@@ -1462,6 +1488,22 @@ add_shortcode( 'bt_schedule', function() {
 			
 
 </div><!-- #bt-schedule-app -->
+
+<!-- OVERDUE LIST (0.56.0) -->
+<div class="btp-modal-overlay" id="btpOverdueModal" onclick="if(event.target===this)btCloseOverdueList()">
+  <div class="bt-modal-wrap">
+    <div class="bt-modal-header">
+      <span class="bt-modal-title">JOBS FROM <span>PREVIOUS WEEKS</span></span>
+      <button class="btp-modal-close" onclick="btCloseOverdueList()">&#215;</button>
+    </div>
+    <div class="btp-od-tools">
+      <label><input type="checkbox" id="btpOdAll" onchange="btOdToggleAll(this.checked)"> Select all</label>
+      <button class="btp-od-btn done" id="btpOdBulk" onclick="btOdCompleteSelected()" disabled>&#10003; Mark selected complete</button>
+      <span class="btp-od-count" id="btpOdCount"></span>
+    </div>
+    <div class="btp-od-list" id="btpOdList"></div>
+  </div>
+</div>
 
 <!-- JOB MODAL -->
 <div class="btp-modal-overlay" id="btpJobModalOverlay" onclick="if(event.target===this)btCloseModal()">
@@ -3805,6 +3847,150 @@ async function btCheckOverdue() {
   } catch(e) { bar.classList.remove('visible'); }
 }
 
+/* ── OVERDUE LIST (0.56.0) ──
+   Clicking the red bar opens every unfinished job dated before this Monday,
+   oldest first, grouped by week. Status changes save immediately through the
+   same /status route as the right-click menu. A finished row stays in the list
+   (struck through) until the window closes, so the list does not jump around
+   while someone is working down it. */
+const BTP_OD_STATUSES = [
+  ['None','#ccc'], ['Pending Approval','#F57C00'], ['Approved/Items Ordered','#4a5568'],
+  ['Ready for Production','#2E7D32'], ['Complete/Notify Customer','#b0bec5'], ['On Hold','#f44336']
+];
+const BTP_OD_DONE = 'Complete/Notify Customer';
+let btOdJobs = [], btOdChanged = false;
+
+function btOdMonday(d) {
+  const x = new Date(d); x.setHours(0,0,0,0);
+  const dow = x.getDay(); x.setDate(x.getDate() + ((dow===0)?-6:1-dow));
+  return x;
+}
+function btOdYmd(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+async function btOpenOverdueList() {
+  const modal = document.getElementById('btpOverdueModal');
+  const list  = document.getElementById('btpOdList');
+  list.innerHTML = '<div class="btp-od-empty">Loading\u2026</div>';
+  document.getElementById('btpOdCount').textContent = '';
+  document.getElementById('btpOdAll').checked = false;
+  modal.classList.add('open');
+  btOdChanged = false;
+  try {
+    const mondayStr = btOdYmd(btOdMonday(new Date()));
+    const raw = await btFetch('/jobs');
+    btOdJobs = raw.map(btNormalizeJob)
+      .filter(j => j.dueDate && j.dueDate < mondayStr && j.status !== BTP_OD_DONE)
+      .sort((a,b) => a.dueDate.localeCompare(b.dueDate) || (a.sortOrder - b.sortOrder));
+  } catch(e) {
+    list.innerHTML = '<div class="btp-od-empty">Could not load jobs. Close this and try again.</div>';
+    return;
+  }
+  btOdRender();
+}
+
+function btOdRender() {
+  const list = document.getElementById('btpOdList');
+  if (!btOdJobs.length) {
+    list.innerHTML = '<div class="btp-od-empty">Nothing left from previous weeks. &#127881;</div>';
+    btOdUpdateCount(); return;
+  }
+  const color = st => (BTP_OD_STATUSES.find(x => x[0] === st) || ['', '#ccc'])[1];
+  let html = '<table><thead><tr><th style="width:28px"></th><th>Order</th><th>Customer</th><th>Dept</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>';
+  let lastWeek = '';
+  btOdJobs.forEach(j => {
+    const due = new Date(j.dueDate + 'T12:00:00');
+    const wk  = btOdYmd(btOdMonday(due));
+    if (wk !== lastWeek) {
+      lastWeek = wk;
+      const m = new Date(wk + 'T12:00:00');
+      html += '<tr class="btp-od-week"><td colspan="7">Week of ' + m.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + '</td></tr>';
+    }
+    const done = j.status === BTP_OD_DONE;
+    const opts = BTP_OD_STATUSES.map(([v]) =>
+      '<option value="' + btEscHtml(v) + '"' + (v === j.status ? ' selected' : '') + '>' + btEscHtml(v.replace('/', ' / ')) + '</option>').join('');
+    html += '<tr data-id="' + j.id + '"' + (done ? ' class="btp-od-gone"' : '') + '>' +
+      '<td><input type="checkbox" class="btp-od-chk" value="' + j.id + '"' + (done ? ' disabled' : '') + ' onchange="btOdUpdateCount()"></td>' +
+      '<td class="btp-od-order">' + btEscHtml(j.orderNum || '\u2014') + '</td>' +
+      '<td class="btp-od-cust" title="' + btEscHtml(j.customer) + '">' + btEscHtml(j.customer) + '</td>' +
+      '<td><span class="btp-od-dept">' + btEscHtml(j.dept || '\u2014') + '</span></td>' +
+      '<td class="btp-od-due">' + due.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + '</td>' +
+      '<td><select style="border-left-color:' + color(j.status) + '" onchange="btOdSetStatus(' + j.id + ', this.value)">' + opts + '</select></td>' +
+      '<td class="btp-od-act">' +
+        (done ? '' : '<button class="btp-od-btn done" onclick="btOdSetStatus(' + j.id + ', BTP_OD_DONE)">&#10003; Complete</button> ') +
+        '<button class="btp-od-btn ghost" onclick="btOdJump(' + j.id + ')">Go to &#8594;</button>' +
+      '</td></tr>';
+  });
+  list.innerHTML = html + '</tbody></table>';
+  btOdUpdateCount();
+}
+
+function btOdUpdateCount() {
+  const left = btOdJobs.filter(j => j.status !== BTP_OD_DONE).length;
+  const sel  = document.querySelectorAll('#btpOdList .btp-od-chk:checked').length;
+  document.getElementById('btpOdCount').textContent = left + ' still open' + (sel ? ' \u00b7 ' + sel + ' selected' : '');
+  const bulk = document.getElementById('btpOdBulk');
+  bulk.disabled = !sel;
+  bulk.innerHTML = '&#10003; Mark ' + (sel ? sel + ' ' : 'selected ') + 'complete';
+}
+
+function btOdToggleAll(on) {
+  document.querySelectorAll('#btpOdList .btp-od-chk:not(:disabled)').forEach(c => { c.checked = on; });
+  btOdUpdateCount();
+}
+
+async function btOdSetStatus(id, status) {
+  const job = btOdJobs.find(j => j.id == id);
+  if (!job) return;
+  const prev = job.status;
+  job.status = status;
+  btOdRender();
+  try {
+    await btFetch('/jobs/' + id + '/status', 'POST', {status, user_name: btUserName});
+    btOdChanged = true;
+  } catch(e) {
+    job.status = prev;
+    btOdRender();
+    alert('Could not save that status. Check the connection and try again.');
+  }
+}
+
+async function btOdCompleteSelected() {
+  const ids = [...document.querySelectorAll('#btpOdList .btp-od-chk:checked')].map(c => parseInt(c.value));
+  if (!ids.length) return;
+  if (!confirm('Mark ' + ids.length + ' job' + (ids.length > 1 ? 's' : '') + ' as Complete / Notify Customer?')) return;
+  const bulk = document.getElementById('btpOdBulk');
+  bulk.disabled = true; bulk.textContent = 'SAVING\u2026';
+  let failed = 0;
+  for (const id of ids) {
+    try {
+      await btFetch('/jobs/' + id + '/status', 'POST', {status: BTP_OD_DONE, user_name: btUserName});
+      const job = btOdJobs.find(j => j.id == id);
+      if (job) job.status = BTP_OD_DONE;
+      btOdChanged = true;
+    } catch(e) { failed++; }
+  }
+  document.getElementById('btpOdAll').checked = false;
+  btOdRender();
+  if (failed) alert(failed + ' job' + (failed > 1 ? 's' : '') + ' did not save. They are still open in the list; try again.');
+}
+
+function btCloseOverdueList() {
+  const modal = document.getElementById('btpOverdueModal');
+  if (!modal.classList.contains('open')) return;
+  modal.classList.remove('open');
+  if (btOdChanged) { btOdChanged = false; btRefreshWeek(); }
+}
+
+function btOdJump(id) {
+  const job = btOdJobs.find(j => j.id == id);
+  if (!job) return;
+  document.getElementById('btpOverdueModal').classList.remove('open');
+  btOdChanged = false;   // btSearchJump reloads the week it lands on
+  btSearchJump(job.id, job.dueDate);
+}
+
 function btGoToOverdue() {
   const bar = document.getElementById('btOverdueBar');
   const oldest = bar.dataset.oldestDate;
@@ -4529,7 +4715,7 @@ document.addEventListener('visibilitychange', function() {
 
 /* ── ESC to close ── */
 function btEsc(e) {
-  if (e.key === 'Escape') { btCloseModal(); btCloseStoreModal(); btCloseContextMenu(); btCloseBackupPanel(); btCloseMore(); }
+  if (e.key === 'Escape') { btCloseOverdueList(); btCloseModal(); btCloseStoreModal(); btCloseContextMenu(); btCloseBackupPanel(); btCloseMore(); }
 }
 document.addEventListener('keydown', btEsc);
 
