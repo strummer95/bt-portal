@@ -364,10 +364,10 @@ add_shortcode( 'bt_schedule', function() {
   box-shadow:0 4px 16px rgba(0,0,0,.4);
 }
 #bt-schedule-app #btSearchInput::placeholder { color:var(--gray-400); font-style:italic; }
-#bt-schedule-app #btSearchInput:focus { background:rgba(255,255,255,.05); }
+#bt-schedule-app #btSearchInput:focus { background:var(--navy-dark) linear-gradient(rgba(255,255,255,.05),rgba(255,255,255,.05)); }
 #bt-schedule-app #btSearchClear { display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--gray-400); font-size:18px; line-height:1; cursor:pointer; padding:2px 6px; border-radius:4px; }
 #bt-schedule-app #btSearchClear:hover { color:var(--white); background:rgba(255,255,255,.08); }
-#bt-schedule-app .bt-search-wrap.has-text #btSearchClear { display:block; }
+#bt-schedule-app .bt-search-wrap.expanded #btSearchClear { display:block; }
 #bt-schedule-app .bt-search-results { position:absolute; top:calc(100% + 6px); left:0; right:0; min-width:340px; max-height:380px; overflow-y:auto; background:var(--navy-dark); border:1px solid rgba(255,255,255,.15); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.4); z-index:600; display:none; }
 #bt-schedule-app .bt-search-wrap.open .bt-search-results { display:block; }
 #bt-schedule-app .bt-search-result { padding:9px 12px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,.06); transition:background .12s; display:flex; align-items:center; gap:10px; }
@@ -1173,8 +1173,8 @@ add_shortcode( 'bt_schedule', function() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
         <div class="bt-search-overlay">
-          <input type="text" id="btSearchInput" placeholder="Search order # or customer&hellip;" autocomplete="off" oninput="btSearchInputHandler()" onfocus="btSearchInputHandler()" />
-          <button type="button" id="btSearchClear" onclick="btSearchClear()" title="Clear">&times;</button>
+          <input type="text" id="btSearchInput" placeholder="Search order # or customer&hellip;" autocomplete="off" oninput="btSearchInputHandler()" onfocus="btSearchInputHandler()" onkeydown="if(event.key==='Escape')btSearchClose()" />
+          <button type="button" id="btSearchClear" onclick="btSearchClose()" title="Close search">&times;</button>
           <div class="bt-search-results" id="btSearchResults"></div>
         </div>
       </div>
@@ -3680,7 +3680,7 @@ function btSearchWeekLabel(dueDate) {
 }
 
 async function btSearchJump(jobId, dueDate) {
-  btSearchClear(false);
+  btSearchClose();
   if (dueDate) {
     const target = new Date(dueDate + 'T12:00:00');
     const targetDow = target.getDay();
@@ -3717,6 +3717,17 @@ function btSearchClear(refocus = true) {
   if (refocus) input.focus();
 }
 
+// Close the search completely. The box sits on top of Filters, the calendar and
+// the week label, so leaving it open with nothing in it covers the header.
+function btSearchClose() {
+  const wrap  = document.getElementById('btSearchWrap');
+  const input = document.getElementById('btSearchInput');
+  if (!wrap || !input) return;
+  input.value = '';
+  input.blur();
+  wrap.classList.remove('expanded','open','has-text');
+}
+
 function btSearchToggle() {
   const wrap  = document.getElementById('btSearchWrap');
   const input = document.getElementById('btSearchInput');
@@ -3724,8 +3735,7 @@ function btSearchToggle() {
   if (expanded) {
     setTimeout(() => input.focus(), 60);
   } else {
-    input.value = '';
-    wrap.classList.remove('open','has-text');
+    btSearchClose();
   }
 }
 
