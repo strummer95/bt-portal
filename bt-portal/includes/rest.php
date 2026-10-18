@@ -11,29 +11,29 @@ add_action( 'rest_api_init', function() {
     $ns = 'boomerts/v1';
 
     // ── JOBS ─────────────────────────────────────────────────────────────
-    register_rest_route( $ns, '/jobs', ['methods'=>'GET','callback'=>'btp_get_jobs','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/jobs', ['methods'=>'POST','callback'=>'btp_create_job','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/jobs/(?P<id>\d+)', ['methods'=>'PUT','callback'=>'btp_update_job','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/jobs/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_job','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/jobs/(?P<id>\d+)/status', ['methods'=>'POST','callback'=>'btp_update_job_status','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/jobs/reorder', ['methods'=>'POST','callback'=>'btp_reorder_jobs','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/jobs/sort', ['methods'=>'POST','callback'=>'btp_sort_jobs','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/jobs', ['methods'=>'GET','callback'=>'btp_get_jobs','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/jobs', ['methods'=>'POST','callback'=>'btp_create_job','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/jobs/(?P<id>\d+)', ['methods'=>'PUT','callback'=>'btp_update_job','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/jobs/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_job','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/jobs/(?P<id>\d+)/status', ['methods'=>'POST','callback'=>'btp_update_job_status','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/jobs/reorder', ['methods'=>'POST','callback'=>'btp_reorder_jobs','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/jobs/sort', ['methods'=>'POST','callback'=>'btp_sort_jobs','permission_callback'=>'btp_rest_can_access']);
     register_rest_route( $ns, '/jobs/blank-history', ['methods'=>'GET','callback'=>'btp_blank_history','permission_callback'=>'btp_rest_can_access']);
     register_rest_route( $ns, '/jobs/dtf-match', ['methods'=>'GET','callback'=>'btp_dtf_match','permission_callback'=>'btp_rest_can_access']);
 
     // ── STORES ───────────────────────────────────────────────────────────
-    register_rest_route( $ns, '/stores', ['methods'=>'GET','callback'=>'btp_get_stores','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/stores', ['methods'=>'POST','callback'=>'btp_create_store','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/stores/(?P<id>\d+)', ['methods'=>'PUT','callback'=>'btp_update_store','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/stores/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_store','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/stores/reorder', ['methods'=>'POST','callback'=>'btp_reorder_stores','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/stores', ['methods'=>'GET','callback'=>'btp_get_stores','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/stores', ['methods'=>'POST','callback'=>'btp_create_store','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/stores/(?P<id>\d+)', ['methods'=>'PUT','callback'=>'btp_update_store','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/stores/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_store','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/stores/reorder', ['methods'=>'POST','callback'=>'btp_reorder_stores','permission_callback'=>'btp_rest_can_access']);
 
     // ── STORE CATEGORIES ─────────────────────────────────────────────────
-    register_rest_route( $ns, '/store-categories', ['methods'=>'GET','callback'=>'btp_get_store_cats','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/store-categories', ['methods'=>'POST','callback'=>'btp_create_store_cat','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/store-categories/(?P<id>\d+)', ['methods'=>'PUT','callback'=>'btp_update_store_cat','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/store-categories/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_store_cat','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/store-categories/reorder', ['methods'=>'POST','callback'=>'btp_reorder_store_cats','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/store-categories', ['methods'=>'GET','callback'=>'btp_get_store_cats','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/store-categories', ['methods'=>'POST','callback'=>'btp_create_store_cat','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/store-categories/(?P<id>\d+)', ['methods'=>'PUT','callback'=>'btp_update_store_cat','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/store-categories/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_store_cat','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/store-categories/reorder', ['methods'=>'POST','callback'=>'btp_reorder_store_cats','permission_callback'=>'btp_rest_can_access']);
 
     // ── BACKUPS ───────────────────────────────────────────────────────────
     register_rest_route( $ns, '/backups', ['methods'=>'GET','callback'=>'btp_get_backups','permission_callback'=>'btp_rest_can_backup']);
@@ -43,17 +43,17 @@ add_action( 'rest_api_init', function() {
     register_rest_route( $ns, '/backups/(?P<id>\d+)/restore', ['methods'=>'POST','callback'=>'btp_restore_backup','permission_callback'=>'btp_rest_can_backup']);
 
     // ── CONTACTS ──────────────────────────────────────────────────────────
-    register_rest_route( $ns, '/contacts', ['methods'=>'GET','callback'=>'btp_get_contacts','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/contacts', ['methods'=>'POST','callback'=>'btp_create_contact','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/contacts/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_contact','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/contacts', ['methods'=>'GET','callback'=>'btp_get_contacts','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/contacts', ['methods'=>'POST','callback'=>'btp_create_contact','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/contacts/(?P<id>\d+)', ['methods'=>'DELETE','callback'=>'btp_delete_contact','permission_callback'=>'btp_rest_can_access']);
 
     // ── DAY NOTES (shared across all employees) ──────────────────────────
-    register_rest_route( $ns, '/day-notes', ['methods'=>'GET','callback'=>'btp_get_day_notes','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/day-notes', ['methods'=>'POST','callback'=>'btp_save_day_note','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/day-notes', ['methods'=>'GET','callback'=>'btp_get_day_notes','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/day-notes', ['methods'=>'POST','callback'=>'btp_save_day_note','permission_callback'=>'btp_rest_can_access']);
 
     // ── CLOSED DAYS (shared day capacity / closures) ─────────────────────
-    register_rest_route( $ns, '/closed-days', ['methods'=>'GET','callback'=>'btp_get_closed_days','permission_callback'=>'__return_true']);
-    register_rest_route( $ns, '/closed-days', ['methods'=>'POST','callback'=>'btp_save_closed_day','permission_callback'=>'__return_true']);
+    register_rest_route( $ns, '/closed-days', ['methods'=>'GET','callback'=>'btp_get_closed_days','permission_callback'=>'btp_rest_can_access']);
+    register_rest_route( $ns, '/closed-days', ['methods'=>'POST','callback'=>'btp_save_closed_day','permission_callback'=>'btp_rest_can_access']);
 });
 
 // ── JOB CALLBACKS ────────────────────────────────────────────────────────

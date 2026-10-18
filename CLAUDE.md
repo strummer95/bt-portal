@@ -116,21 +116,27 @@ Portal logins replaced a shared WordPress page password and a "Who are you?" nam
 - Five failed attempts triggers a 15 minute cooldown; **Unlock** on Portal Users clears it.
 - The portal page is excluded from page caching, since it renders the signed-in name.
 
-## Open security issue, not yet fixed
+## Security issue fixed, pending Dillon's confirmation before deploy
 
-`includes/rest.php` still registers the legacy `boomerts/v1` routes with
-`permission_callback => __return_true`, which means **unauthenticated read and write**:
+`includes/rest.php` used to register the legacy `boomerts/v1` routes with
+`permission_callback => __return_true`, which meant **unauthenticated read and write**:
 jobs (GET/POST/PUT/DELETE, status, reorder, sort), stores, store-categories, contacts,
-day-notes, closed-days.
+day-notes, closed-days. Backups were already locked to a `bt_portal_backups` capability
+in 0.27.0 because a restore silently replaces the entire board.
 
-Backups were locked to a `bt_portal_backups` capability in 0.27.0 because a restore
-silently replaces the entire board. The rest were left open deliberately, not by oversight,
-because a customer-facing page may be hitting them.
+All of the above now require `btp_rest_can_access` (logged in + `bt_portal_access`),
+the same gate `/account` already uses — the portal's own `btFetch()` already sends the
+`wp_rest` nonce and relies on the login cookie, so no frontend change was needed.
 
-**Before locking these down**, check whether the public exchange form or any other
-customer-facing page calls them. Ask Dillon rather than assuming. The exchange routes and
-the Woo order-completion route already require the portal's `wp_rest` nonce, so they are
-the model to follow.
+Checked for customer-facing callers before changing this: no shortcode or JS in this
+plugin calls these routes outside the signed-in portal tabs (Jobs, Stores, Contacts,
+etc.), and none of bt-catalog, bt-quote, bt-spiritwear, bt-dtf, or bt-accounts reference
+them — they use unrelated `boomerts/v1` routes (`catalog`, `quote`, `price`,
+`bridge/style`) registered by those plugins. No search can rule out an external page
+outside this org's repos, so **Dillon should confirm nothing public depends on anonymous
+access to these specific routes before this ships.** The exchange routes and the Woo
+order-completion route still use the nonce-only `btp_ex_perm`/`btp_woo_perm` model, since
+those are the ones confirmed customer-facing.
 
 ## Things that will bite you
 
