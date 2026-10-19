@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orde
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.56.2**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.56.4**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -279,5 +279,6 @@ UI cannot produce either (customer + dept required). Refused writes are logged t
 `btp_rejected_job_writes` (last 50: time, IP, user agent, referer, login). `GET /jobs/blank-history`
 (`btp_rest_can_access`) looks each no-date card up by id in backups taken since the last restore (a restore
 re-ids every card) and returns the newest non-blank version; the list offers Restore (full PUT of those
-fields). Bulk delete covers only cards the backups show were always blank. The routes are still open to
-anyone for valid writes; locking them down is the remaining fix.
+fields). Bulk delete covers only cards the backups show were always blank. The routes were open to
+anyone for valid writes at the time; see "Security issue fixed, pending Dillon's confirmation before
+deploy" above — `btp_rest_can_access` now gates all of this (0.56.4).
