@@ -225,7 +225,7 @@ function btp_printavo_flush_cache() {
 add_action('rest_api_init', function() {
     register_rest_route('boomerts/v1', '/printavo-link/(?P<order_number>[0-9]+)', array(
         'methods'             => 'GET',
-        'permission_callback' => '__return_true',
+        'permission_callback' => 'btp_rest_can_access',
         'callback'            => function($request) {
             $result = btp_printavo_lookup(
                 $request->get_param('order_number'),

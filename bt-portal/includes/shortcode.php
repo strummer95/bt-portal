@@ -5357,7 +5357,7 @@ async function btSaveExchange(orderId, patch) {
   async function resolveOrder(orderNum) {
     if (linkCache[orderNum]) return linkCache[orderNum];
     try {
-      const r = await fetch(ENDPOINT + encodeURIComponent(orderNum));
+      const r = await fetch(ENDPOINT + encodeURIComponent(orderNum), { headers: { 'X-WP-Nonce': btNonce } });
       const data = await r.json();
       if (data && data.url) {
         linkCache[orderNum] = data.url;

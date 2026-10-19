@@ -948,9 +948,9 @@ function btp_users_notice($message, $type = 'success') {
 /* ─────────────────────────────────────────────────────────────────────────
    REST — the in-portal account panel
 
-   Everything here is capability-checked. Note that the older boomerts/v1
-   routes in rest.php still use __return_true, from back when the portal had
-   no login at all; these new routes deliberately do not follow that pattern.
+   Everything here is capability-checked, same as the rest of the
+   boomerts/v1 namespace (rest.php and printavo.php both gate on
+   btp_rest_can_access too).
    ───────────────────────────────────────────────────────────────────── */
 
 function btp_rest_can_access() {
