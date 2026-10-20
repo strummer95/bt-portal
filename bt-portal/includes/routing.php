@@ -34,6 +34,8 @@ function btp_tab_map() {
         // 'chipply-barcoder' => 'barcoder',   // hidden — see shortcode.php
         // 'barcoder'         => 'barcoder',
         'chipply-scanner'  => 'chipscan',
+        'blank-orders'     => 'blanks',
+        'blanks'           => 'blanks',     // convenience alias
         'bruce-art'        => 'bruceart',
         'bruce'            => 'bruceart',   // convenience alias
     ) );
@@ -52,6 +54,7 @@ function btp_tab_slugs() {
         'omgscan'   => 'omg-scanner',
         // 'barcoder'  => 'chipply-barcoder',  // hidden
         'chipscan'  => 'chipply-scanner',
+        'blanks'    => 'blank-orders',
         'bruceart'  => 'bruce-art',
         'vendors'   => 'vendors',
     );

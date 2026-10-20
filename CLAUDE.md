@@ -1,11 +1,11 @@
 # BT Portal
 
 Boomer T's employee portal. Schedule board, online stores, quote tab, redirect tool,
-contacts, exchange tracking, vendors, OMG and Chipply scanners, BT Accounts orders, Bruce Art, day notes, backups, and the
+contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT Accounts orders, Bruce Art, day notes, backups, and the
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.56.2**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.57.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -65,7 +65,7 @@ using it, and what actually caused it when a bug is being fixed.
 `redirect.php` (`/stores/` redirects, `[bt_redirect_tab]`) · `woo.php` ·
 `dtf-jobs.php` (DTF Studio orders → Transfers cards) · `exchanges.php` ·
 `exchange-mail.php` · `exchanges-diag.php` · `omg-scanner.php` · `printavo.php` ·
-`chipply-barcoder.php` (hidden) · `chipply-scanner.php` · `bruce-art.php` · `routing.php` (`/employees/<tab>`
+`chipply-barcoder.php` (hidden) · `chipply-scanner.php` · `blank-orders.php` · `bruce-art.php` · `routing.php` (`/employees/<tab>`
 deep links) · `bt-admin.php` · `admin.php` · `updater.php`
 
 The plugin is a port of the old BT-Sched WPCode snippets (1 = DB, 2 = API, 3 = Frontend,
@@ -281,3 +281,29 @@ UI cannot produce either (customer + dept required). Refused writes are logged t
 re-ids every card) and returns the newest non-blank version; the list offers Restore (full PUT of those
 fields). Bulk delete covers only cards the backups show were always blank. The routes are still open to
 anyone for valid writes; locking them down is the remaining fix.
+
+## Other > Blank Orders (0.57.0)
+
+`includes/blank-orders.php`, shortcode `[bt_blank_orders]`, tab id `blanks`, slug `blank-orders` (alias
+`blanks`). Phone camera flips through red-circled OMG/Chipply sheets; each photo is read server side by the
+Claude API (`BTP_BLANKS_MODEL`, default `claude-opus-5-5`, JSON schema output, `fallbacks: "default"` with a
+retry without it if the beta is ever refused). Raw `wp_remote_post`, not the PHP SDK: no Composer in a zip.
+
+- Key: `BTP_ANTHROPIC_KEY` in wp-config, else option `btp_blanks_api_key` encrypted with the vendor key
+  (`btp_vendor_encrypt`). Admin page BT Portal > Blank Orders has Save / Test / Remove. Never sent to the browser.
+- Tables `bt_blank_batches`, `bt_blank_pages`, `bt_blank_items`. Code map is option `btp_blank_codes`
+  (code => vendor, style, name), seeded with 5100 => S&S C2 Sport 5100.
+- Photos in `uploads/btp-blanks/<batch>/<random>.jpg`, served only by `GET /blanks/pages/<id>/image` behind
+  `btp_rest_can_access`. Bitnami ignores .htaccess, so the random name is the real protection for a direct URL.
+- One page per read request, driven by the browser (2 at a time). A page is claimed (`status = reading`)
+  before the API call so two screens never pay twice; a claim older than 5 minutes counts as dead.
+- Re-reading a page replaces every line from that page, corrections included (the screen warns). Lines
+  added by hand have `page_id = 0` and are never touched.
+- Auto capture thresholds were measured on mock sheets, see the comment at the top of the file. Do not
+  switch the same-page test back to a plain pixel difference: it cannot tell a new sheet from a nudged one.
+- `btSwitchTab()` calls `btpBlanksLoad()` on open and `btpBlanksLeave()` on every other tab, which stops the
+  camera. The camera also stops when the page is hidden.
+- Testing locally: WordPress on SQLite works (sqlite-database-integration drop-in). The default block theme
+  texturizes inline scripts (`&&` becomes `&#038;&#038;`) and breaks every portal tab; turn off
+  `run_wptexturize` there. The live site renders through Elementor's blank template and does not do this.
+  Chromium's `--use-file-for-fake-video-capture=<y4m>` drives the auto capture end to end.
