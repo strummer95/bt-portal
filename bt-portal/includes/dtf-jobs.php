@@ -165,6 +165,21 @@ function btp_dtf_is_inhouse( $name ) {
     return false;
 }
 
+/**
+ * Customers who order for an organisation: their card carries the
+ * organisation, since that is who the job is for. Matched on billing name,
+ * ignoring case and spacing. Add more with the btp_dtf_name_aliases filter.
+ */
+function btp_dtf_alias( $name ) {
+    $needle = btp_dtf_norm($name);
+    if ( $needle === '' ) return '';
+    $aliases = apply_filters('btp_dtf_name_aliases', [
+        'adrienne bale' => 'Team Up',
+    ]);
+    foreach ( (array) $aliases as $n => $label ) if ( $needle === btp_dtf_norm($n) ) return (string) $label;
+    return '';
+}
+
 /** Billing name, falling back to the company and then the email. */
 function btp_dtf_customer_name( $order ) {
     // Billing email, and the logged-in account's email in case billing differs.
@@ -180,6 +195,8 @@ function btp_dtf_customer_name( $order ) {
     if ( method_exists($order, 'get_formatted_billing_full_name') )
         $name = trim( (string) $order->get_formatted_billing_full_name() );
     if ( btp_dtf_is_inhouse($name) ) return BTP_DTF_INHOUSE_LABEL;
+    $alias = btp_dtf_alias($name);
+    if ( $alias !== '' ) return $alias;
 
     if ( $name === '' && method_exists($order, 'get_billing_company') )
         $name = trim( (string) $order->get_billing_company() );

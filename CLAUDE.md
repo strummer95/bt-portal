@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.57.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.57.1**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -244,6 +244,7 @@ Before that, a card only existed if somebody read the new order email and typed 
   the rule and is pure, so it can be tested without a clock.
 - An order whose billing name is in `btp_dtf_inhouse_names` (Dillon Johnson) is carded as
   **In House Transfers** (0.55.2); shop work should not carry an owner's name into production.
+- Customer aliases (0.57.1): `btp_dtf_alias()` / filter `btp_dtf_name_aliases` puts an organisation on the card for a person who orders for it (Adrienne Bale → **Team Up**). Billing name, case and spacing ignored, checked after in-house.
 - `btp_dtf_jobs_since` (0.55.1) records when the feature first ran. An order created before
   it is ignored forever, so a status change on an old order cannot drop it on today's
   board — which is how the pre-0.55.0 backlog landed on the 23rd.
