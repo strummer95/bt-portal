@@ -167,14 +167,29 @@ function btp_dtf_is_inhouse( $name ) {
 
 /**
  * Customers who order for an organisation: their card carries the
- * organisation, since that is who the job is for. Matched on billing name,
- * ignoring case and spacing. Add more with the btp_dtf_name_aliases filter.
+ * organisation, since that is who the job is for. Matched on the coupon code
+ * the organisation's people use, then on billing name, both ignoring case and
+ * spacing. Add more with the btp_dtf_coupon_aliases and btp_dtf_name_aliases
+ * filters.
  */
+function btp_dtf_coupon_alias( $order ) {
+    if ( ! method_exists($order, 'get_coupon_codes') ) return '';
+    $aliases = apply_filters('btp_dtf_coupon_aliases', [
+        'tua15' => 'Team Up',
+    ]);
+    foreach ( (array) $order->get_coupon_codes() as $code ) {
+        $needle = btp_dtf_norm($code);
+        foreach ( (array) $aliases as $c => $label ) if ( $needle !== '' && $needle === btp_dtf_norm($c) ) return (string) $label;
+    }
+    return '';
+}
+
 function btp_dtf_alias( $name ) {
     $needle = btp_dtf_norm($name);
     if ( $needle === '' ) return '';
     $aliases = apply_filters('btp_dtf_name_aliases', [
-        'adrienne bale' => 'Team Up',
+        'adrienne bale'  => 'Team Up',
+        'james thompson' => 'Team Up',
     ]);
     foreach ( (array) $aliases as $n => $label ) if ( $needle === btp_dtf_norm($n) ) return (string) $label;
     return '';
@@ -195,7 +210,8 @@ function btp_dtf_customer_name( $order ) {
     if ( method_exists($order, 'get_formatted_billing_full_name') )
         $name = trim( (string) $order->get_formatted_billing_full_name() );
     if ( btp_dtf_is_inhouse($name) ) return BTP_DTF_INHOUSE_LABEL;
-    $alias = btp_dtf_alias($name);
+    $alias = btp_dtf_coupon_alias($order);
+    if ( $alias === '' ) $alias = btp_dtf_alias($name);
     if ( $alias !== '' ) return $alias;
 
     if ( $name === '' && method_exists($order, 'get_billing_company') )
