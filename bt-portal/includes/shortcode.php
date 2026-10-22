@@ -784,10 +784,14 @@ add_shortcode( 'bt_schedule', function() {
 }
 #bt-schedule-app .day-col-cards > .job-card { position:relative; z-index:1; }
 #bt-schedule-app .day-hatch-reason {
-  order:999;
-  position:relative;
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
   z-index:1;
-  padding:14px 8px 6px;
+  padding:0 8px;
+  pointer-events:none;
   font-family:'Oswald',sans-serif;
   font-size:18px;
   font-weight:700;
@@ -2211,10 +2215,9 @@ function btRenderBoard() {
       ? '<div class="day-closed-tab">CLOSED</div>'
       : isRestricted ? `<div class="day-closed-tab" style="background:${capTabColors[capacity]||'#FF9800'};">${capacity}% CLOSED</div>` : '';
 
-    // The stripes are background only and sit behind the cards. The reason is a normal
-    // child of the column instead of living inside them, so it lands below the last job
-    // card rather than across one; order:999 keeps it last however many cards are
-    // appended after this markup is set.
+    // The stripes are background only and sit behind the cards. The reason is a sibling
+    // rather than a child of them, so it is never clipped to the block, and
+    // btPlaceHatchReasons() puts it where it can actually be read.
     const hatchHtml = isRestricted
       ? `<div class="day-hatch-block" style="height:${capacity}%;min-height:60px;"></div>`
         + (closedReason ? `<div class="day-hatch-reason">${btEscHtml(closedReason)}</div>` : '')
@@ -2283,6 +2286,34 @@ function btRenderBoard() {
         cc.lastElementChild && cc.lastElementChild.scrollIntoView({behavior:'smooth', block:'end'});
       });
     }
+  });
+
+  requestAnimationFrame(btPlaceHatchReasons);
+  setTimeout(btPlaceHatchReasons, 150);
+  if (!window.btHatchResizeBound) {
+    window.btHatchResizeBound = true;
+    window.addEventListener('resize', btPlaceHatchReasons, {passive: true});
+  }
+}
+
+/* The stripes cover a share of the WHOLE column, and a column is as tall as the busiest
+   day of the week, so on one day they start above the cards and on another they start
+   well below the last one. Centre the reason in the part of them left in view: from
+   whichever sits lower, the top of the stripes or the bottom of the last card, down to
+   the foot of the column. Both depend on the finished layout, so this measures. */
+function btPlaceHatchReasons() {
+  document.querySelectorAll('#btBoard .day-col-cards').forEach(cc => {
+    const block  = cc.querySelector('.day-hatch-block');
+    const reason = cc.querySelector('.day-hatch-reason');
+    if (!block || !reason) return;
+    const ccRect = cc.getBoundingClientRect();
+    const cards  = cc.querySelectorAll('.job-card');
+    const last   = cards[cards.length - 1];
+    const top    = Math.max(
+      block.getBoundingClientRect().top - ccRect.top,
+      last ? last.getBoundingClientRect().bottom - ccRect.top : 0
+    );
+    reason.style.top = Math.round((top + ccRect.height) / 2) + 'px';
   });
 }
 
