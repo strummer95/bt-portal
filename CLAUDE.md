@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.57.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.57.1**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)

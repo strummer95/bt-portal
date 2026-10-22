@@ -756,8 +756,10 @@ add_shortcode( 'bt_schedule', function() {
 #btCalendarOverlay .cal-day.is-closed .cal-day-num { color:rgba(255,100,100,.7); text-decoration:line-through; }
 #btCalendarOverlay .cal-day.is-restricted { background:rgba(255,152,0,.1); border-color:rgba(255,152,0,.3); }
 #bt-schedule-app .day-col.closed .day-col-header-inner { opacity:.6; }
-#bt-schedule-app .day-col.closed .day-closed-tab { display:block; }
-#bt-schedule-app .day-closed-tab { display:none; background:#b71c1c; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; text-align:center; padding:2px 0; width:100%; }
+#bt-schedule-app .day-col.closed .day-closed-tab,
+#bt-schedule-app .day-col.restricted .day-closed-tab { display:block; }
+#bt-schedule-app .day-closed-tab { display:none; background:#b71c1c; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; text-align:center; padding:3px 6px; width:100%; box-sizing:border-box; line-height:1.25; }
+#bt-schedule-app .day-closed-tab .day-closed-tab-why { font-weight:600; letter-spacing:.04em; opacity:.92; }
 #bt-schedule-app .day-col.closed .day-col-cards { display:none; }
 #bt-schedule-app .day-closed-body {
   flex:1;
@@ -781,7 +783,7 @@ add_shortcode( 'bt_schedule', function() {
   pointer-events:none;
   border-top:1px dashed rgba(0,0,0,.12);
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content:center;
   padding:12px 8px;
 }
@@ -2205,12 +2207,16 @@ function btRenderBoard() {
     const dayDateStr = day.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 
     const capTabColors = {25:'#FFC107', 50:'#FF9800', 75:'#f44336'};
+    // The reason rides in the tab because the column header is sticky; the hatch block
+    // sits at the bottom of a column as tall as the busiest day, so its copy of the
+    // reason can start below the fold and be missed entirely.
+    const capReasonHtml = closedReason ? ` <span class="day-closed-tab-why">· ${btEscHtml(closedReason)}</span>` : '';
     const capacityTabHtml = isClosed
-      ? '<div class="day-closed-tab">CLOSED</div>'
-      : isRestricted ? `<div class="day-closed-tab" style="background:${capTabColors[capacity]||'#FF9800'};">${capacity}% CLOSED</div>` : '';
+      ? `<div class="day-closed-tab">CLOSED${capReasonHtml}</div>`
+      : isRestricted ? `<div class="day-closed-tab" style="background:${capTabColors[capacity]||'#FF9800'};">${capacity}% CLOSED${capReasonHtml}</div>` : '';
 
     const hatchHtml = isRestricted
-      ? `<div class="day-hatch-block" style="height:${capacity}%;min-height:60px;"><div class="day-hatch-reason">${closedReason}</div></div>`
+      ? `<div class="day-hatch-block" style="height:${capacity}%;min-height:60px;"><div class="day-hatch-reason">${btEscHtml(closedReason)}</div></div>`
       : '';
 
     col.innerHTML = `
@@ -2232,7 +2238,7 @@ function btRenderBoard() {
       </div>
       ${isClosed ? `
         <div class="day-closed-body">
-          <div class="day-closed-reason">${closedReason||'Closed'}</div>
+          <div class="day-closed-reason">${btEscHtml(closedReason)||'Closed'}</div>
           ${dayJobs.length > 0 ? `<div class="day-closed-jobs">${dayJobs.length} job${dayJobs.length!==1?'s':''} hidden</div>` : ''}
         </div>
       ` : `
