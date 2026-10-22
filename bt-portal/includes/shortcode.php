@@ -2290,17 +2290,18 @@ function btRenderBoard() {
 
   requestAnimationFrame(btPlaceHatchReasons);
   setTimeout(btPlaceHatchReasons, 150);
-  if (!window.btHatchResizeBound) {
-    window.btHatchResizeBound = true;
-    window.addEventListener('resize', btPlaceHatchReasons, {passive: true});
+  if (!window.btHatchBound) {
+    window.btHatchBound = true;
+    window.addEventListener('resize', btHatchReflow, {passive: true});
+    window.addEventListener('scroll', btHatchReflow, {passive: true});
   }
 }
 
 /* The stripes cover a share of the WHOLE column, and a column is as tall as the busiest
-   day of the week, so on one day they start above the cards and on another they start
-   well below the last one. Centre the reason in the part of them left in view: from
-   whichever sits lower, the top of the stripes or the bottom of the last card, down to
-   the foot of the column. Both depend on the finished layout, so this measures. */
+   day of the week, so they routinely run a long way past the bottom of the window.
+   Centre the reason in the hatching you can SEE: the block, clipped above by the last
+   card and by the sticky header, and below by the foot of the window. Re-run on scroll,
+   so it holds the middle of whatever is on screen rather than the middle of the column. */
 function btPlaceHatchReasons() {
   document.querySelectorAll('#btBoard .day-col-cards').forEach(cc => {
     const block  = cc.querySelector('.day-hatch-block');
@@ -2309,11 +2310,33 @@ function btPlaceHatchReasons() {
     const ccRect = cc.getBoundingClientRect();
     const cards  = cc.querySelectorAll('.job-card');
     const last   = cards[cards.length - 1];
-    const top    = Math.max(
-      block.getBoundingClientRect().top - ccRect.top,
-      last ? last.getBoundingClientRect().bottom - ccRect.top : 0
+    const header = cc.closest('.day-col').querySelector('.day-col-header');
+
+    /* The hatching that is not sitting behind a job card. */
+    const hatchTop    = Math.max(
+      block.getBoundingClientRect().top,
+      last ? last.getBoundingClientRect().bottom : ccRect.top
     );
-    reason.style.top = Math.round((top + ccRect.height) / 2) + 'px';
+    const hatchBottom = ccRect.bottom;
+
+    /* ...and the part of THAT which is on screen, below the header stuck to the top. */
+    const seenTop    = Math.max(hatchTop, header ? header.getBoundingClientRect().bottom : 0);
+    const seenBottom = Math.min(hatchBottom, window.innerHeight);
+
+    /* Scrolled clear of the hatching altogether: park it in the middle of the block. */
+    const centre = seenBottom > seenTop
+      ? (seenTop + seenBottom) / 2
+      : (hatchTop + hatchBottom) / 2;
+    reason.style.top = Math.round(centre - ccRect.top) + 'px';
+  });
+}
+
+/* One placement per frame, however many scroll events the browser fires. */
+function btHatchReflow() {
+  if (btHatchReflow.tick) return;
+  btHatchReflow.tick = requestAnimationFrame(() => {
+    btHatchReflow.tick = 0;
+    btPlaceHatchReasons();
   });
 }
 
