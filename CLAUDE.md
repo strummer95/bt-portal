@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.57.4**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.58.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -115,6 +115,32 @@ Portal logins replaced a shared WordPress page password and a "Who are you?" nam
   emailed. No links to expire. Characters ambiguous when read aloud (O/0, I/1) are avoided.
 - Five failed attempts triggers a 15 minute cooldown; **Unlock** on Portal Users clears it.
 - The portal page is excluded from page caching, since it renders the signed-in name.
+- The login field reads "Username or email" (0.58.0) and accepts either — `sanitize_user()`
+  passes `@`/`.` through untouched, and WP core's `authenticate` filter chain already resolves
+  an email to the matching account, so `wp_signon()` needed no change, only the label.
+- **Forgot password (0.58.0, AUTH-1).** `btp_forgot_form_html()` / `btp_handle_forgot()` in
+  `users.php` is a portal-native `?btp_action=forgot` screen, reached from "Forgot your
+  password?" on the login screen and "SEND ME A NEW LINK" on an expired set-password link.
+  It does not invent a second token system: it still calls core's `retrieve_password()`, which
+  is already a random key, sha256-hashed via `wp_hash_password()`, 1-hour TTL
+  (`password_reset_expiration`), single-use, and already redirected to the portal's own
+  set-password screen by the existing `btp_reset_message` filter. What this adds on top:
+  - Identical response ("If that account has portal access, a reset link is on its way")
+    whether the identifier matches no account, an account with no portal access, or a real
+    portal account — core's own lost-password screen instead answers "Invalid username or
+    email", which is an existence leak by wording.
+  - Rate limiting on the request itself, which core has none of: 3 attempts per account per
+    hour, 10 per IP per 15 minutes (`btp_forgot_rate_limited`/`_bump`), transient-based like
+    the existing failed-login cooldown. A rate-limited request still shows the success message,
+    on purpose — a different message under rate-limiting would itself leak existence.
+  - Accepts username or email (`btp_find_user_by_login_or_email`), matching the login field.
+  - **wp-login.php?action=lostpassword still exists and is not rate-limited by this plugin.**
+    It's WP core, reachable directly, and this plugin can't disable it without blocking
+    WordPress administrators out of their own lost-password flow. Everyone with portal access
+    is also a WP user, so in principle someone could bypass the portal's cooldown by using the
+    bare core URL instead. Left alone rather than patched blind: throttling a core AJAX/POST
+    hook from a plugin, untestable against real WP core in this environment, on a site with no
+    shell access to fix a mistake, was judged riskier than the gap itself. Flagged for Dillon.
 
 ## Security issue fixed, pending Dillon's confirmation before deploy
 
