@@ -138,6 +138,15 @@ access to these specific routes before this ships.** The exchange routes and the
 order-completion route still use the nonce-only `btp_ex_perm`/`btp_woo_perm` model, since
 those are the ones confirmed customer-facing.
 
+## Secrets (this repo is public)
+
+No password, login, token or key goes in this repo, not even in a seed or a note. Vendor
+passwords are typed into the Vendors tab (stored encrypted). API keys go in wp-config.php
+constants (`BTP_ANTHROPIC_KEY`, `BTP_PRINTAVO_TOKEN`) or in the encrypted options the admin
+pages save. Never set `BT_VENDOR_KEY` to a new value on a live site: every stored password
+would stop decrypting. `includes/updater.php` only accepts a `download_url` on
+`raw.githubusercontent.com/strummer95/bt-portal/`.
+
 ## Things that will bite you
 
 - **Modal id collisions with BT Quote.** The Quote tab renders BT Quote's
