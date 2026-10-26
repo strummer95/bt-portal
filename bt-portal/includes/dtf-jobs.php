@@ -165,6 +165,57 @@ function btp_dtf_is_inhouse( $name ) {
     return false;
 }
 
+/**
+ * The business an order belongs to, when the person who placed it is not the name
+ * that should go into production.
+ *
+ * Two ways in, and the code is the one that keeps working. A discount code on the
+ * order says which account the work is for no matter whose name went into billing,
+ * so the next person hired there is covered the first time they order, with nothing
+ * to set up. The name list is only a backstop for the order that forgets the code.
+ *
+ * Billing company is deliberately NOT used for this. It is filled in by the customer,
+ * left blank as often as not, and reading it would quietly rename every other business
+ * order on the board as well.
+ *
+ * Both lists are options so a new account does not need a release, and both carry a
+ * filter for code.
+ */
+function btp_dtf_account_codes() {
+    // discount code => customer name on the card
+    $codes = get_option('btp_dtf_account_codes', ['tua15' => 'Team Up']);
+    return (array) apply_filters('btp_dtf_account_codes', $codes);
+}
+
+function btp_dtf_account_names() {
+    // billing name => customer name on the card
+    $names = get_option('btp_dtf_account_names', []);
+    return (array) apply_filters('btp_dtf_account_names', $names);
+}
+
+/** The account name for this order, or '' if it belongs to nobody in particular. */
+function btp_dtf_account_for( $order, $billing_name ) {
+    if ( method_exists($order, 'get_coupon_codes') ) {
+        $used = (array) $order->get_coupon_codes();
+        foreach ( btp_dtf_account_codes() as $code => $account ) {
+            $account = trim( (string) $account );
+            if ( $account === '' ) continue;
+            foreach ( $used as $u ) {
+                if ( btp_dtf_norm($u) === btp_dtf_norm($code) ) return $account;
+            }
+        }
+    }
+
+    $needle = btp_dtf_norm($billing_name);
+    if ( $needle !== '' ) {
+        foreach ( btp_dtf_account_names() as $person => $account ) {
+            $account = trim( (string) $account );
+            if ( $account !== '' && $needle === btp_dtf_norm($person) ) return $account;
+        }
+    }
+    return '';
+}
+
 /** Billing name, falling back to the company and then the email. */
 function btp_dtf_customer_name( $order ) {
     // Billing email, and the logged-in account's email in case billing differs.
@@ -180,6 +231,9 @@ function btp_dtf_customer_name( $order ) {
     if ( method_exists($order, 'get_formatted_billing_full_name') )
         $name = trim( (string) $order->get_formatted_billing_full_name() );
     if ( btp_dtf_is_inhouse($name) ) return BTP_DTF_INHOUSE_LABEL;
+
+    $account = btp_dtf_account_for($order, $name);
+    if ( $account !== '' ) return $account;
 
     if ( $name === '' && method_exists($order, 'get_billing_company') )
         $name = trim( (string) $order->get_billing_company() );

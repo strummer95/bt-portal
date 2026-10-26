@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.57.4**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.57.5**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -258,6 +258,17 @@ Before that, a card only existed if somebody read the new order email and typed 
   searches the whole table, not the loaded week. **DTF cards only, on purpose:** Printavo
   jobs go on several days and Dillon does not want a popup for those. A failed lookup saves
   without asking. Edits never ask.
+
+- **Account codes: whose name goes on the card (0.57.5).** Two people at the same business
+  order under their own names, and the board needs to say the business. `btp_dtf_account_codes`
+  (option, with a filter, seeded `tua15 => Team Up`) maps a discount code on the order to the
+  customer name, so anyone there is covered the first time they order and a new account is one
+  option entry. `btp_dtf_account_names` maps a billing name the same way and exists only as the
+  backstop for an order that forgets the code. In House still wins over both.
+  **Billing company is deliberately not consulted.** It is customer-entered, blank as often as
+  not, and preferring it would quietly rename every other business order on the board. Note the
+  no-update rule above still holds: cards already written keep the name they were written with,
+  so a mis-named card is fixed by hand.
 
 ## Overdue list (0.56.0)
 
