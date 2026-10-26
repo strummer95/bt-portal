@@ -279,8 +279,8 @@ UI cannot produce either (customer + dept required). Refused writes are logged t
 `btp_rejected_job_writes` (last 50: time, IP, user agent, referer, login). `GET /jobs/blank-history`
 (`btp_rest_can_access`) looks each no-date card up by id in backups taken since the last restore (a restore
 re-ids every card) and returns the newest non-blank version; the list offers Restore (full PUT of those
-fields). Bulk delete covers only cards the backups show were always blank. The routes are still open to
-anyone for valid writes; locking them down is the remaining fix.
+fields). Bulk delete covers only cards the backups show were always blank. The routes were later locked
+down to `btp_rest_can_access` in 0.56.4 (see "Security issue fixed" above).
 
 ## Other > Blank Orders (0.57.0)
 
