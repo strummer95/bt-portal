@@ -41,6 +41,43 @@ function btp_tab_map() {
     ) );
 }
 
+/**
+ * What the browser tab says.
+ *
+ * The site name is deliberately not part of it. This page is the portal, not a
+ * page on the shop's website, and it is usually open alongside several other BT
+ * tabs that all start with the same words - the point is being able to pick it
+ * out of a row, which is the opposite of a shared prefix.
+ */
+function btp_portal_title() {
+    return (string) apply_filters( 'btp_portal_title', get_option( 'btp_portal_title', "Boomer T's Portal" ) );
+}
+
+/** Tab id => the name that goes in the browser tab. */
+function btp_tab_labels() {
+    return (array) apply_filters( 'btp_tab_labels', array(
+        'schedule'  => 'Schedule',
+        'stores'    => 'Online Stores',
+        'quote'     => 'Quote',
+        'redirect'  => 'Redirect',
+        'contacts'  => 'Contacts',
+        'exchanges' => 'Exchanges',
+        'accounts'  => 'Accounts',
+        'omgscan'   => 'OMG Scanner',
+        'chipscan'  => 'Chipply Scanner',
+        'blanks'    => 'Blank Orders',
+        'bruceart'  => 'Bruce Art',
+        'vendors'   => 'Vendors',
+    ) );
+}
+
+/** 'Schedule - Boomer T's Portal', or just the portal when the tab is unknown. */
+function btp_document_title( $tab = '' ) {
+    $labels = btp_tab_labels();
+    $label  = ( $tab !== '' && isset($labels[$tab]) ) ? $labels[$tab] : '';
+    return $label ? $label . ' · ' . btp_portal_title() : btp_portal_title();
+}
+
 /** Tab id => canonical slug (the one written into the address bar). */
 function btp_tab_slugs() {
     return array(

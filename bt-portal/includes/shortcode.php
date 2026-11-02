@@ -41,6 +41,8 @@ add_shortcode( 'bt_schedule', function() {
         'pretty' => function_exists('btp_pretty_urls') ? btp_pretty_urls() : false,
         'slugs'  => function_exists('btp_tab_slugs') ? btp_tab_slugs() : new stdClass(),
         'initial'=> $btp_initial_tab ? $btp_initial_tab : 'schedule',
+        'title'  => function_exists('btp_portal_title') ? btp_portal_title() : '',
+        'labels' => function_exists('btp_tab_labels') ? btp_tab_labels() : new stdClass(),
     ) );
 
     ob_start();
@@ -4884,6 +4886,17 @@ function btSwitchTab(tab, push) {
 
   // Bruce's SDK loads the first time the tab is actually visible.
   if (tab === 'bruceart' && window.btpBruceArtLoad) window.btpBruceArtLoad();
+
+  btSetTitle(tab);
+}
+
+/* Name the browser tab, and say which portal tab it is sitting on, so a row of
+   them is readable. PHP sets the same string for the first paint; this keeps it
+   in step from here, since switching tabs never reloads the page. */
+function btSetTitle(tab) {
+  if (!BT_ROUTE.title) return;
+  const label = BT_ROUTE.labels && BT_ROUTE.labels[tab];
+  document.title = label ? label + ' · ' + BT_ROUTE.title : BT_ROUTE.title;
 }
 
 window.addEventListener('popstate', function() {

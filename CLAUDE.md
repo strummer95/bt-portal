@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.57.5**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.57.6**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -99,6 +99,23 @@ with `btp_tab` + `btp_item` (`?tab=x&item=y` without pretty permalinks). JS help
 `btpCurrentItem()` and `btpSetItem(tab, item)`; `btTabFromUrl()` reads only the first
 segment. `btSwitchTab()` calls the Accounts loader after its pushState, so the tab always
 reads the settled address. Only Accounts uses items so far (order number, lowercased).
+
+## The browser tab's title (0.57.6)
+
+The tab read `boomerts.com/employees/` because nothing on the page ever set a title and a
+browser falls back to the address when there is none. `btp_document_title()` in `routing.php`
+builds `Schedule · Boomer T's Portal` from `btp_portal_title()` (option `btp_portal_title`,
+filterable, so renaming it needs no release) and `btp_tab_labels()`.
+
+`head.php` sets it **two ways on purpose, and which one fires is the theme's call**: a theme
+declaring `title-tag` support has WordPress render the tag and only wants the text, which is the
+`pre_get_document_title` filter; a theme that does not declare it renders no tag at all, so
+nothing passed to that filter is ever printed and we echo one. The echo is guarded on
+`current_theme_supports('title-tag')`, so the page can never end up with two.
+
+`btSetTitle()` in `shortcode.php` keeps it in step after that, called at the end of
+`btSwitchTab()`, since switching tabs never reloads the page. A tab id with no label falls back
+to the portal name alone, so a new tab added without a label entry degrades quietly.
 
 ## Auth model
 
