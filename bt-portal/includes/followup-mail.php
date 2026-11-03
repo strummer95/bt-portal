@@ -162,6 +162,75 @@ function btp_fu_body_html($body) {
 }
 
 /* =========================================================================
+   WHICH WAY THE MAIL GOES OUT
+   ========================================================================= */
+
+/**
+ * 'wp' (default) or 'graph'.
+ *
+ * WordPress is the default because the portal already sends the exchange
+ * notices this way and they arrive, so there is nothing to set up and the
+ * page is usable the day it lands. Microsoft Graph is the upgrade for when
+ * outreach starts landing in spam, which is a real risk this mail has and the
+ * exchange notices do not: an exchange notice goes to somebody who is waiting
+ * for it, and this goes to somebody who has not heard from the shop in a year.
+ *
+ * Whether WordPress is good enough here comes down to what is behind wp_mail()
+ * on this site. An SMTP plugin pointed at Microsoft 365 is already properly
+ * authenticated and Graph would add nothing. Raw PHP mail() straight off the
+ * Lightsail box is not authenticated for boomerts.com at all, and sending
+ * outreach that way is how a domain's reputation gets damaged. Checking that
+ * is a job for the WordPress admin, not something this file can tell.
+ */
+function btp_fu_transport() {
+    $t = (string) get_option('btp_fu_transport', 'wp');
+    return $t === 'graph' ? 'graph' : 'wp';
+}
+
+/** Can we send at all right now? */
+function btp_fu_mail_ready() {
+    return btp_fu_transport() === 'graph' ? btp_fu_graph_ready() : true;
+}
+
+function btp_fu_from_name() {
+    return (string) get_option('btp_fu_from_name', "Boomer T's Ink & Thread");
+}
+
+/** Send, whichever way is turned on. Returns true or WP_Error. */
+function btp_fu_send_mail($to, $subject, $body_text) {
+    if (btp_fu_transport() === 'graph') {
+        return btp_fu_graph_send($to, $subject, $body_text, btp_fu_sender());
+    }
+    return btp_fu_wp_send($to, $subject, $body_text);
+}
+
+/**
+ * The same wp_mail() the exchange notices use.
+ *
+ * Reply-To is set as well as From: if this site turns out to send through a
+ * relay that rewrites the From address, the reply still has to reach orders@,
+ * because a reply is the entire point of the email.
+ */
+function btp_fu_wp_send($to, $subject, $body_text) {
+    $from = btp_fu_sender();
+    $sent = wp_mail(
+        $to,
+        $subject,
+        btp_fu_body_html($body_text),
+        array(
+            'Content-Type: text/html; charset=UTF-8',
+            'From: ' . btp_fu_from_name() . ' <' . $from . '>',
+            'Reply-To: ' . btp_fu_from_name() . ' <' . $from . '>',
+        )
+    );
+    if (!$sent) {
+        return new WP_Error('btp_fu_wp_mail_failed',
+            'WordPress could not send the email. The same thing would stop the exchange notices going out, so check the site mail settings.');
+    }
+    return true;
+}
+
+/* =========================================================================
    MICROSOFT GRAPH
    ========================================================================= */
 

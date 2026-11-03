@@ -467,6 +467,7 @@ function btp_fu_order_out($r) {
     return array(
         'visual_id'    => (string) $r['visual_id'],
         'printavo_id'  => (string) $r['printavo_id'],
+        'nickname'     => (string) $r['nickname'],
         'event'        => btp_fu_event_label($r),
         'event_manual' => (string) $r['event_manual'],
         'event_guess'  => (string) $r['event_guess'],

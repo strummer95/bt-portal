@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.59.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.59.1**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -372,6 +372,36 @@ No AI anywhere in this feature.
   calls). `btp_fu_nodes()` accepts `nodes` or `edges { node }` for that reason, and the admin screen
   has **Run one batch now** which surfaces the real error. Confirm against the live API before
   trusting a backfill.
+
+### Layout (0.59.1)
+
+Built to match **Online Stores**, because that is the shape Dillon reads: fixed table, condensed
+uppercase headers on `--g100`, collapsible dark group headers (Due now / Next 2 weeks / Later), and
+the same card fallback under 640px. Row columns are order #, last year's date, customer,
+organization, nickname, event, status. Clicking a row opens the panel underneath it - contact, past
+orders, notes and history on the left, the editable email and the Send / Replied / Not this year /
+Snooze / Reset buttons on the right. No modal, so nothing to come back from.
+
+Two things that bit, both fixed:
+- The row rule (`white-space:nowrap; overflow:hidden`) is inherited by the detail `<td>` as well, and
+  the email ran straight out of the side of the table. `.fu-detail > td` resets all three.
+- The table and the phone cards each render their own copy of the panel, so a draft written into one
+  lands in the hidden one half the time. `panelsOf()` returns both and everything writes to both.
+
+### Which way the mail goes out (0.59.1)
+
+`btp_fu_transport()`: **`wp` by default**, `graph` optional. WordPress is the default because the
+portal already sends exchange notices through `wp_mail()` and they arrive, so the page is usable the
+day it lands with nothing to set up. Graph is the upgrade for when outreach starts landing in junk,
+which is a risk this mail carries and the exchange notices do not: an exchange notice goes to
+somebody waiting for it.
+
+**Whether `wp_mail()` is good enough here is a fact about the site, not about this code.** An SMTP
+plugin pointed at Microsoft 365 is already authenticated and Graph adds nothing; raw PHP `mail()`
+off the Lightsail box is not authenticated for boomerts.com at all and sending outreach that way is
+how a domain's reputation gets damaged. The From and Reply-To are both set to
+`btp_fu_sender()`, but a relay is free to rewrite From - which is why Reply-To is set too, since a
+reply is the entire point. **BT Portal > Follow Up > Send me a test** settles it in one go.
 
 ### Sending from orders@boomerts.com
 
