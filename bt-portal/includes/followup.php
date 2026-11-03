@@ -52,7 +52,7 @@
  */
 if (!defined('ABSPATH')) exit;
 
-define('BTP_FU_DB_VERSION', '1');
+define('BTP_FU_DB_VERSION', '2');   // 2 adds bt_fu_ignored
 define('BTP_FU_BACKFILL_FROM', '2020-01-01');
 define('BTP_FU_PAGE_SIZE', 25);          // Printavo caps `first` at 25.
 define('BTP_FU_PAGES_PER_TICK', 8);      // Keeps one cron run well short of PHP's limit.
@@ -108,6 +108,21 @@ function btp_fu_install() {
         updated_at DATETIME NULL,
         PRIMARY KEY (id),
         UNIQUE KEY person_cycle (contact_email, cycle_year)
+    ) $charset;");
+
+    /* Events somebody has decided will never come round again. Keyed on the
+       event and not the cycle, because that is the whole difference between
+       this and "not this year". */
+    dbDelta("CREATE TABLE IF NOT EXISTS " . btp_fu_table('ignored') . " (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        contact_email VARCHAR(190) NOT NULL DEFAULT '',
+        event_key VARCHAR(190) NOT NULL DEFAULT '',
+        event_label VARCHAR(190) NOT NULL DEFAULT '',
+        note VARCHAR(255) NOT NULL DEFAULT '',
+        who VARCHAR(120) NOT NULL DEFAULT '',
+        at DATETIME NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY person_event (contact_email, event_key)
     ) $charset;");
 
     dbDelta("CREATE TABLE IF NOT EXISTS " . btp_fu_table('log') . " (
@@ -270,6 +285,68 @@ function btp_fu_rename_targets($rows, $visual_id) {
 }
 
 /* =========================================================================
+   NEVER AGAIN: one-off jobs that should stop coming back
+   =========================================================================
+
+   Separate from "not this year", which is a decision about one cycle and
+   lapses with it. This is a decision about the event itself: a retirement
+   do, a one-off fundraiser, a walk-in who was never going to reorder.
+
+   Keyed on (person, event) rather than on the person, so ignoring the 5K
+   they ran once does not also bury their team shirts every November.
+   ========================================================================= */
+
+function btp_fu_ignore_key($email, $event_key) {
+    return btp_fu_norm($email) . '|' . btp_fu_norm($event_key);
+}
+
+/** Every ignored (person, event), as a lookup set. */
+function btp_fu_ignored_set() {
+    global $wpdb;
+    $t    = btp_fu_table('ignored');
+    $rows = $wpdb->get_results("SELECT contact_email, event_key FROM $t", ARRAY_A);
+    $out  = array();
+    foreach ((array) $rows as $r) $out[btp_fu_ignore_key($r['contact_email'], $r['event_key'])] = true;
+    return $out;
+}
+
+/** The ignored list itself, for the screen that lets somebody undo one. */
+function btp_fu_ignored_rows() {
+    global $wpdb;
+    $t = btp_fu_table('ignored');
+    return $wpdb->get_results("SELECT * FROM $t ORDER BY at DESC", ARRAY_A) ?: array();
+}
+
+function btp_fu_ignore($email, $event_key, $label, $note = '') {
+    global $wpdb;
+    $email = btp_fu_norm($email);
+    $key   = btp_fu_norm($event_key);
+    if ($email === '' || $key === '') return false;
+
+    $t  = btp_fu_table('ignored');
+    $id = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $t WHERE contact_email = %s AND event_key = %s", $email, $key));
+    if ($id) return true;
+
+    return (bool) $wpdb->insert($t, array(
+        'contact_email' => $email,
+        'event_key'     => $key,
+        'event_label'   => (string) $label,
+        'note'          => (string) $note,
+        'who'           => btp_fu_actor(),
+        'at'            => current_time('mysql'),
+    ));
+}
+
+function btp_fu_unignore($email, $event_key) {
+    global $wpdb;
+    return (bool) $wpdb->delete(btp_fu_table('ignored'), array(
+        'contact_email' => btp_fu_norm($email),
+        'event_key'     => btp_fu_norm($event_key),
+    ));
+}
+
+/* =========================================================================
    THE WINDOW
    ========================================================================= */
 
@@ -352,14 +429,14 @@ function btp_fu_build_cards($today = '', $window_days = 0) {
     );
     if (!$rows) return array();
 
-    return btp_fu_cards_from_rows($rows, $today, $window_days);
+    return btp_fu_cards_from_rows($rows, $today, $window_days, btp_fu_ignored_set());
 }
 
 /**
  * Pure: rows in, cards out. Split off the query so the rules can be tested
  * without a database.
  */
-function btp_fu_cards_from_rows($rows, $today, $window_days) {
+function btp_fu_cards_from_rows($rows, $today, $window_days, $ignored = array()) {
     $by_person  = array();   // email => rows
     $by_company = array();   // company key => rows
 
@@ -394,12 +471,21 @@ function btp_fu_cards_from_rows($rows, $today, $window_days) {
                 'last_due'  => $last['due_at'],
                 'next_due'  => btp_fu_next_anniversary($last['due_at'], $today),
                 'days_out'  => $days_out,
+                'ignored'   => !empty($ignored[btp_fu_ignore_key($last['contact_email'], $key)]),
                 'orders'    => array_map('btp_fu_order_out', array_reverse($group)),
             );
         }
         if (!$due_events) continue;
 
         usort($due_events, function ($a, $b) { return $a['days_out'] - $b['days_out']; });
+
+        /* An ignored event is kept rather than dropped, so the Ignored filter
+           can still show it and somebody can put it back. A card whose events
+           are ALL ignored is the one that leaves the working list. */
+        $live = array();
+        foreach ($due_events as $e) if (!$e['ignored']) $live[] = $e;
+        $all_ignored = empty($live);
+        $due_events  = $all_ignored ? $due_events : $live;
 
         /* Reordered? Anything for this person or their company due later than
            the newest order that opened a window. */
@@ -426,6 +512,7 @@ function btp_fu_cards_from_rows($rows, $today, $window_days) {
 
         $first = $due_events[0];
         $cards[] = array(
+            'all_ignored'   => $all_ignored,
             'contact_email' => $person_rows[0]['contact_email'],
             'contact_name'  => btp_fu_pick_name($person_rows),
             'contact_phone' => btp_fu_pick_field($person_rows, 'contact_phone'),
