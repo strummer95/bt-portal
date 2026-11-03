@@ -38,6 +38,9 @@ add_action('rest_api_init', function () {
     register_rest_route($ns, '/followup/orders/(?P<visual_id>[^/]+)/event', array(
         'methods' => 'POST', 'permission_callback' => $perm, 'callback' => 'btp_rest_fu_rename_event',
     ));
+    register_rest_route($ns, '/followup/ignore', array(
+        'methods' => 'POST', 'permission_callback' => $perm, 'callback' => 'btp_rest_fu_ignore',
+    ));
     register_rest_route($ns, '/followup/sync', array(
         array('methods' => 'GET',  'permission_callback' => $perm, 'callback' => 'btp_rest_fu_sync_state'),
         array('methods' => 'POST', 'permission_callback' => $perm, 'callback' => 'btp_rest_fu_sync_run'),
@@ -51,7 +54,8 @@ function btp_rest_fu_cards() {
 
     foreach ($cards as $card) {
         $state = btp_fu_card_state($card['contact_email'], $card['cycle_year']);
-        $card['status']       = $card['reorder'] ? 'reordered' : $state['status'];
+        $card['status']       = $card['reorder'] ? 'reordered'
+                              : (!empty($card['all_ignored']) ? 'ignored' : $state['status']);
         $card['emailed_at']   = $state['emailed_at'];
         $card['emailed_by']   = $state['emailed_by'];
         $card['snooze_until'] = $state['snooze_until'];
@@ -236,6 +240,39 @@ function btp_rest_fu_rename_event($req) {
     }
 
     return new WP_REST_Response(array('event' => $event, 'orders' => $targets), 200);
+}
+
+/**
+ * Never follow this one up again, or undo that.
+ *
+ * Takes the event key rather than an order id, because the decision is
+ * about the event: "this was a one-off", not "this invoice was a one-off".
+ */
+function btp_rest_fu_ignore($req) {
+    $email = btp_fu_norm($req->get_param('contact_email'));
+    $key   = btp_fu_norm($req->get_param('event_key'));
+    $label = trim((string) $req->get_param('event_label'));
+    $note  = trim((string) $req->get_param('note'));
+    $on    = $req->get_param('ignored');
+    $on    = ($on === null) ? true : filter_var($on, FILTER_VALIDATE_BOOLEAN);
+
+    if ($email === '' || $key === '') {
+        return new WP_Error('btp_fu_bad_ignore', 'Which event?', array('status' => 400));
+    }
+
+    $ok = $on ? btp_fu_ignore($email, $key, $label, $note) : btp_fu_unignore($email, $key);
+    if (!$ok && $on) {
+        return new WP_Error('btp_fu_ignore_failed', 'Could not save that.', array('status' => 500));
+    }
+
+    /* Logged against the current cycle so it shows in the card history. */
+    $year = (int) $req->get_param('cycle_year');
+    if ($year >= 2000) {
+        $id = btp_fu_card_id($email, $year);
+        btp_fu_log($id, 'ignore', ($on ? 'Ignoring ' : 'No longer ignoring ') . ($label !== '' ? $label : $key) . ($note !== '' ? ' - ' . $note : ''));
+    }
+
+    return new WP_REST_Response(array('ignored' => $on, 'event_key' => $key), 200);
 }
 
 function btp_rest_fu_sync_state() {
@@ -491,6 +528,7 @@ function btp_follow_up_shortcode() {
       <button type="button" class="fu-pill" data-filter="later">Later</button>
       <button type="button" class="fu-pill" data-filter="contacted">Contacted</button>
       <button type="button" class="fu-pill" data-filter="not_this_year">Not this year</button>
+      <button type="button" class="fu-pill" data-filter="ignored">Ignored</button>
       <button type="button" class="fu-pill" data-filter="all">All</button>
     </div>
   </div>
@@ -567,6 +605,7 @@ function btp_follow_up_shortcode() {
 #btp-fu .fu-badge.s-replied { background:#e3f2fd; color:#0d47a1; }
 #btp-fu .fu-badge.s-reordered { background:#fde9f6; color:#8c1361; }
 #btp-fu .fu-badge.s-not_this_year { background:#f5f5f5; color:var(--g600); }
+#btp-fu .fu-badge.s-ignored { background:#ede7f6; color:#4527a0; }
 #btp-fu .fu-badge.s-snoozed { background:#fff3e0; color:#8a5300; }
 
 /* ── collapsible group headers, same as the stores categories ── */
@@ -664,7 +703,8 @@ function btp_follow_up_shortcode() {
 
   var STATUS_TEXT = {
     to_contact: 'To contact', emailed: 'Emailed', replied: 'Replied',
-    reordered: 'Reordered', not_this_year: 'Not this year', snoozed: 'Snoozed'
+    reordered: 'Reordered', not_this_year: 'Not this year', snoozed: 'Snoozed',
+    ignored: 'Ignored'
   };
   var GROUPS = [
     { key: 'due_now',   label: 'Due now' },
@@ -673,12 +713,15 @@ function btp_follow_up_shortcode() {
   ];
 
   function keyOf(c) { return c.contact_email + '|' + c.cycle_year; }
-  function isDone(c) { return c.status === 'reordered' || c.status === 'not_this_year'; }
+  function isDone(c) {
+    return c.status === 'reordered' || c.status === 'not_this_year' || c.status === 'ignored';
+  }
 
   function matches(c) {
     if (filter === 'all') return true;
     if (filter === 'contacted') return c.status === 'emailed' || c.status === 'replied';
     if (filter === 'not_this_year') return c.status === 'not_this_year';
+    if (filter === 'ignored') return c.status === 'ignored';
     if (isDone(c) || c.status === 'snoozed') return false;
     if (filter === 'open') return true;
     return c.bucket === filter;
@@ -707,8 +750,13 @@ function btp_follow_up_shortcode() {
           + (o.nickname ? '<span>' + esc(o.nickname) + '</span>' : '')
           + '</div>';
       }).join('');
+      var ig = e.ignored
+        ? '<button type="button" class="fu-rename fu-ig" data-ev="' + esc(e.event_key) + '" data-on="0">follow up again</button>'
+        : '<button type="button" class="fu-rename fu-ig" data-ev="' + esc(e.event_key) + '" data-on="1">ignore</button>';
       return '<div class="fu-ev"><div class="fu-ev-name">' + esc(e.event)
+        + (e.ignored ? ' <span class="fu-badge s-ignored">Ignored</span>' : '')
         + '<button type="button" class="fu-rename" data-order="' + esc(e.orders[0].visual_id) + '">rename</button>'
+        + ig
         + '</div>' + orders + '</div>';
     }).join('');
 
@@ -885,6 +933,26 @@ function btp_follow_up_shortcode() {
   document.getElementById('btp-fu').addEventListener('click', function (ev) {
     var grp = ev.target.closest('.fu-grp');
     if (grp) { collapsed[grp.dataset.grp] = !collapsed[grp.dataset.grp]; render(); return; }
+
+    var ig = ev.target.closest('.fu-ig');
+    if (ig) {
+      ev.stopPropagation();
+      var panel = ig.closest('.fu-detail-in');
+      var ic = cardByKey(panel.dataset.key);
+      if (!ic) return;
+      var turningOn = ig.dataset.on === '1';
+      var why = '';
+      if (turningOn) {
+        why = prompt('Never follow this one up again?\n\nAdd a note if you like, or just press OK.', '');
+        if (why === null) return;
+      }
+      api('/followup/ignore', 'POST', {
+        contact_email: ic.contact_email, cycle_year: ic.cycle_year,
+        event_key: ig.dataset.ev, event_label: '', note: why || '', ignored: turningOn
+      }).then(function () { openKey = null; return load(); })
+        .catch(function (e) { say(panel, 'err', e.message); });
+      return;
+    }
 
     var rename = ev.target.closest('.fu-rename');
     if (rename) {

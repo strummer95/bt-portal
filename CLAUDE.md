@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.59.1**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.59.2**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -402,6 +402,20 @@ off the Lightsail box is not authenticated for boomerts.com at all and sending o
 how a domain's reputation gets damaged. The From and Reply-To are both set to
 `btp_fu_sender()`, but a relay is free to rewrite From - which is why Reply-To is set too, since a
 reply is the entire point. **BT Portal > Follow Up > Send me a test** settles it in one go.
+
+### Ignore: one-off jobs (0.59.2)
+
+Table `bt_fu_ignored`, keyed **(contact_email, event_key)**, unique. Distinct from `not_this_year`,
+which is a decision about one cycle on the card and lapses with it; this is a decision about the
+event and does not. Keyed on the event and not on the person, so ignoring the 5K somebody ran once
+does not also bury their team shirts every November.
+
+`btp_fu_cards_from_rows()` takes the ignored set as its fourth argument and **keeps** ignored events
+rather than dropping them, flagging each `ignored` and the card `all_ignored`. That is what lets the
+Ignored filter list them and the panel offer **follow up again**; a card is only hidden from the
+working filters when every one of its due events is ignored. The button sits next to the event in
+the expanded panel, not with the card-wide buttons, because one card can hold a one-off and
+something that comes round every year.
 
 ### Sending from orders@boomerts.com
 
