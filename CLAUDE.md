@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.59.2**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.59.3**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -416,6 +416,13 @@ Ignored filter list them and the panel offer **follow up again**; a card is only
 working filters when every one of its due events is ignored. The button sits next to the event in
 the expanded panel, not with the card-wide buttons, because one card can hold a one-off and
 something that comes round every year.
+
+**Where the button lives (0.59.3).** Dillon looked for it in the row with Send / Replied / Not this
+year / Snooze / Reset and it was not there, and said he could not tell what the ignore was tied to.
+It is now **Never again** in that row, acting on every event on the card, with a line underneath
+naming what it will stop and how it differs from Not this year. The per-event links stay, but only
+render when a card carries more than one event; on a single-event card they said the same thing
+twice. The word "event" is not shown to anyone - the prompt names the actual events and the person.
 
 ### Sending from orders@boomerts.com
 

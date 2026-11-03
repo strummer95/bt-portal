@@ -645,6 +645,7 @@ function btp_follow_up_shortcode() {
 #btp-fu .fu-btn:hover { border-color:var(--navy); color:var(--navy); }
 #btp-fu .fu-btn.primary { background:var(--pink); border-color:var(--pink); color:#fff; }
 #btp-fu .fu-btn.primary:disabled { opacity:.45; cursor:not-allowed; }
+#btp-fu .fu-hint { margin:7px 0 0; font-size:13px; color:var(--g400); line-height:1.4; }
 #btp-fu .fu-err { margin-top:9px; background:#fdecea; border:1px solid #f3b3ad; color:#8c1d18;
   border-radius:6px; padding:8px 10px; font-size:14px; }
 #btp-fu .fu-ok { margin-top:9px; background:#e8f5e9; border:1px solid #a5d6a7; color:#1b5e20;
@@ -735,6 +736,22 @@ function btp_follow_up_shortcode() {
   /* The order whose number and nickname stand for the whole row. */
   function leadOrder(c) { return c.events[0].orders[0]; }
 
+  /* What Never again will actually stop, named, because "ignore" on its own
+     does not say whether it means this invoice, this event or this customer. */
+  function eventNames(c) {
+    return c.events.map(function (e) { return e.event; });
+  }
+
+  function ignoreHint(c) {
+    var who = c.contact_name || c.contact_email;
+    var what = eventNames(c).join(', ');
+    if (c.all_ignored) {
+      return 'Never again is on for ' + what + '. It will not come back next year either.';
+    }
+    return 'Never again stops ' + what + ' for ' + who
+         + ' coming back, this year and every year. Not this year only skips this time round.';
+  }
+
   /* ── the expanded panel, shared by the table and the phone cards ── */
   function detailHtml(c) {
     var k = esc(keyOf(c));
@@ -750,9 +767,12 @@ function btp_follow_up_shortcode() {
           + (o.nickname ? '<span>' + esc(o.nickname) + '</span>' : '')
           + '</div>';
       }).join('');
-      var ig = e.ignored
-        ? '<button type="button" class="fu-rename fu-ig" data-ev="' + esc(e.event_key) + '" data-on="0">follow up again</button>'
-        : '<button type="button" class="fu-rename fu-ig" data-ev="' + esc(e.event_key) + '" data-on="1">ignore</button>';
+      /* Only worth offering per event when there is more than one; on a
+         single-event card the Never again button already says it. */
+      var ig = (c.events.length < 2) ? ''
+        : (e.ignored
+            ? '<button type="button" class="fu-rename fu-ig" data-ev="' + esc(e.event_key) + '" data-on="0">follow up again</button>'
+            : '<button type="button" class="fu-rename fu-ig" data-ev="' + esc(e.event_key) + '" data-on="1">never again</button>');
       return '<div class="fu-ev"><div class="fu-ev-name">' + esc(e.event)
         + (e.ignored ? ' <span class="fu-badge s-ignored">Ignored</span>' : '')
         + '<button type="button" class="fu-rename" data-order="' + esc(e.orders[0].visual_id) + '">rename</button>'
@@ -788,8 +808,12 @@ function btp_follow_up_shortcode() {
           + '<button type="button" class="fu-btn" data-act="replied">Replied</button>'
           + '<button type="button" class="fu-btn" data-act="not_this_year">Not this year</button>'
           + '<button type="button" class="fu-btn" data-act="snoozed">Snooze</button>'
+          + (c.all_ignored
+              ? '<button type="button" class="fu-btn" data-act="unignore">Follow up again</button>'
+              : '<button type="button" class="fu-btn" data-act="ignore">Never again</button>')
           + '<button type="button" class="fu-btn" data-act="to_contact">Reset</button>'
         + '</div>'
+        + '<p class="fu-hint">' + esc(ignoreHint(c)) + '</p>'
         + '<div class="fu-err" hidden></div>'
         + '<div class="fu-ok" hidden></div>'
       + '</div>'
@@ -971,6 +995,10 @@ function btp_follow_up_shortcode() {
       var c = cardByKey(panel.dataset.key);
       if (!c) return;
       if (btn.dataset.act === 'send') { doSend(c, panel, btn); return; }
+      if (btn.dataset.act === 'ignore' || btn.dataset.act === 'unignore') {
+        doIgnore(c, panel, btn.dataset.act === 'ignore');
+        return;
+      }
       if (btn.dataset.act === 'snoozed') {
         var when = prompt('Snooze until when? (YYYY-MM-DD)', '');
         if (!when) return;
@@ -1017,6 +1045,35 @@ function btp_follow_up_shortcode() {
     return api('/followup/cards/status', 'POST', {
       contact_email: c.contact_email, cycle_year: c.cycle_year, status: status, snooze_until: snooze || ''
     }).then(load).catch(function (e) { say(panel, 'err', e.message); });
+  }
+
+  /* One card can carry more than one event, so this is every event on it.
+     The single-event links in Past orders are there for the other case. */
+  function doIgnore(c, panel, on) {
+    var names = eventNames(c).join(', ');
+    var who   = c.contact_name || c.contact_email;
+    var note  = '';
+    if (on) {
+      note = prompt('Never remind you about ' + names + ' for ' + who + ' again?'
+        + String.fromCharCode(10) + String.fromCharCode(10)
+        + 'This is for one-off jobs. It does not stop anything else they order.'
+        + String.fromCharCode(10)
+        + 'Add a note if you want, or just press OK.', '');
+      if (note === null) return;
+    } else if (!confirm('Start following up ' + names + ' again?')) {
+      return;
+    }
+    var chain = Promise.resolve();
+    c.events.forEach(function (e) {
+      chain = chain.then(function () {
+        return api('/followup/ignore', 'POST', {
+          contact_email: c.contact_email, cycle_year: c.cycle_year,
+          event_key: e.event_key, event_label: e.event, note: note || '', ignored: on
+        });
+      });
+    });
+    chain.then(function () { openKey = null; return load(); })
+         .catch(function (err) { say(panel, 'err', err.message); });
   }
 
   function doSend(c, panel, btn) {
