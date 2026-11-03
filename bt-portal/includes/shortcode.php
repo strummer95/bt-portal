@@ -1223,6 +1223,7 @@ add_shortcode( 'bt_schedule', function() {
             <div class="tab-menu-item" data-tab="barcoder" onclick="btSwitchTab('barcoder')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2"/><path d="M17 4h2a1 1 0 0 1 1 1v2"/><path d="M20 17v2a1 1 0 0 1-1 1h-2"/><path d="M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 9v6"/><path d="M11 9v6"/><path d="M14 9v6"/><path d="M16.5 9v6"/></svg>Chipply Barcoder</div> -->
             <div class="tab-menu-item" data-tab="chipscan" onclick="btSwitchTab('chipscan')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>Chipply Scanner</div>
             <div class="tab-menu-item" data-tab="blanks" onclick="btSwitchTab('blanks')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Blank Orders</div>
+            <div class="tab-menu-item" data-tab="followup" onclick="btSwitchTab('followup')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h8"/><path d="M8 13h5"/></svg>Follow Up</div>
             <div class="tab-menu-item" data-tab="bruceart" onclick="btSwitchTab('bruceart')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>Bruce Art</div>
           </div>
         </div>
@@ -1481,6 +1482,13 @@ add_shortcode( 'bt_schedule', function() {
 <div id="bt-tab-blanks" class="tab-content" style="width:100%;box-sizing:border-box;">
   <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
     <?php echo do_shortcode('[bt_blank_orders]'); ?>
+  </div>
+</div>
+
+<!-- FOLLOW UP TAB: who to chase about next year's order, and the email that does it -->
+<div id="bt-tab-followup" class="tab-content" style="width:100%;box-sizing:border-box;">
+  <div style="background:#f4f5f9;min-height:calc(100vh - 120px);width:100%;box-sizing:border-box;">
+    <?php echo do_shortcode('[bt_follow_up]'); ?>
   </div>
 </div>
 
@@ -4811,7 +4819,7 @@ async function btRestoreFromBackup(id, label) {
 /* ── TABS ── */
 /* Tabs that live inside the OTHER dropdown rather than on the bar itself.
    Add a tab here and it needs nothing else in this function. */
-const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', accounts: 'Accounts', omgscan: 'OMG Scanner', chipscan: 'Chipply Scanner', blanks: 'Blank Orders', bruceart: 'Bruce Art' };  // barcoder: 'Chipply Barcoder' — hidden
+const BT_MORE_TABS = { contacts: 'Contacts', exchanges: 'Exchanges', accounts: 'Accounts', omgscan: 'OMG Scanner', chipscan: 'Chipply Scanner', blanks: 'Blank Orders', bruceart: 'Bruce Art', followup: 'Follow Up' };  // barcoder: 'Chipply Barcoder' — hidden
 
 function btToggleMore(e) {
   // Clicks on the menu items bubble up to this handler; ignore them so the
@@ -4886,6 +4894,9 @@ function btSwitchTab(tab, push) {
 
   // Bruce's SDK loads the first time the tab is actually visible.
   if (tab === 'bruceart' && window.btpBruceArtLoad) window.btpBruceArtLoad();
+
+  // Follow Up reads the whole order history, so it only loads when opened.
+  if (tab === 'followup' && window.btpFollowUpLoad) window.btpFollowUpLoad();
 
   btSetTitle(tab);
 }

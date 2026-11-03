@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.57.6**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.59.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -335,3 +335,80 @@ retry without it if the beta is ever refused). Raw `wp_remote_post`, not the PHP
   texturizes inline scripts (`&&` becomes `&#038;&#038;`) and breaks every portal tab; turn off
   `run_wptexturize` there. The live site renders through Elementor's blank template and does not do this.
   Chromium's `--use-file-for-fake-video-capture=<y4m>` drives the auto capture end to end.
+
+## Other > Follow Up (0.59.0)
+
+`includes/followup.php` (rules + Printavo sync), `includes/followup-mail.php` (the email and
+Microsoft Graph), `includes/followup-page.php` (REST, admin screen, `[bt_follow_up]`). Tab id
+`followup`, slug `follow-up` (alias `followup`). Tables `bt_fu_orders`, `bt_fu_cards`, `bt_fu_log`.
+No AI anywhere in this feature.
+
+- **Who shows up.** Orders group into (contact email, event) and the group's **last** order decides:
+  its month and day rolled forward to the next time that date comes round, due if that lands 0 to
+  `btp_fu_window_days` (45) days out. Checking the last order and not any order is what stops an
+  event that already moved to June from reappearing every November - there is a test for exactly
+  that. A **card is a person**, not an event, so somebody running three teams gets one card and one
+  email listing all three, and the card sorts on its soonest event.
+- **Reorders drop out on their own.** Any order for the same email *or the same company* due later
+  than the order that opened the window counts, which is what catches the reorder placed by the
+  athletic director instead of the coach. The card is kept and marked, never deleted.
+- **Event names are a guess**, from imprint details first (that text is what goes on the garment),
+  then line item descriptions, then the nickname. A rename is stored in `event_manual`, a column the
+  sync never writes, so it survives every later sync.
+- **A rename moves the whole event, not one invoice** (`btp_fu_rename_targets()`). Renaming a single
+  order splits its group, and the orders left behind regroup under the old name as a phantom second
+  event on the same card, due the same week. Found in testing; do not 'simplify' the endpoint back
+  to a one-row update.
+- **Empty dates.** `date_create_immutable('')` is *now*, not a failure, so a row with no due date
+  read as due today. Every date entry point goes through `btp_fu_is_ymd()` first.
+- **Sync.** Reuses the existing `BT Portal > Printavo` credentials through `btp_printavo_gql()`;
+  there is no second place to put a token. Backfill walks backwards a year at a time from today to
+  2020-01-01, a few pages per cron run, keeping its place in `btp_fu_sync_state`; then it flips to
+  daily and only asks for what changed. `first` is capped at 25 by Printavo and the complexity
+  budget is 25000, so every nested connection carries its own `first` - without those the whole
+  query is rejected rather than trimmed.
+- **The query shape is written to Printavo's documented API and has not been run against the live
+  one from a dev machine** (the container cannot reach printavo.com, same as bt-catalog's supplier
+  calls). `btp_fu_nodes()` accepts `nodes` or `edges { node }` for that reason, and the admin screen
+  has **Run one batch now** which surfaces the real error. Confirm against the live API before
+  trusting a backfill.
+
+### Sending from orders@boomerts.com
+
+orders@ is a Microsoft 365 **shared mailbox**, so there is no password to send with. Mail goes
+through Graph `sendMail` on an app registration, `saveToSentItems` on so the shop's own Sent Items
+shows what went out. What Dillon has to set up, once:
+
+1. **Entra admin centre > App registrations > New registration.** Single tenant. No redirect URI.
+   Copy the **Application (client) ID** and **Directory (tenant) ID**.
+2. **API permissions > Add > Microsoft Graph > Application permissions > `Mail.Send`**, then
+   **Grant admin consent**. Application, not Delegated: there is no signed-in user on a cron.
+3. **Certificates & secrets > New client secret.** Copy the value immediately; it is shown once.
+   Note the expiry - sending stops dead on the day it lapses.
+4. **Narrow it to the one mailbox.** `Mail.Send` as an application permission is otherwise every
+   mailbox in the tenant. In Exchange Online PowerShell:
+   `New-ApplicationAccessPolicy -AppId <client id> -PolicyScopeGroupId orders@boomerts.com
+   -AccessRight RestrictAccess -Description "BT Portal Follow Up"`.
+   Check it with `Test-ApplicationAccessPolicy -Identity orders@boomerts.com -AppId <client id>`.
+5. **BT Portal > Follow Up**: paste tenant, client, secret, confirm the sender, press **Test the
+   connection**. The secret is stored with `btp_vendor_encrypt()` and never reaches the browser.
+
+A 403 on send almost always means step 4 does not cover this mailbox; the error says so in words
+rather than leaving a status code.
+
+**Why not SMTP AUTH**, since it is fewer steps: Microsoft disables SMTP AUTH per tenant by default,
+a shared mailbox has no password so it needs a licensed account to send as it, that account's
+password would then sit in the database, and basic auth cannot be scoped to one mailbox the way an
+ApplicationAccessPolicy can. Longer to set up once, narrower forever.
+
+### The email
+
+Template is an option, first line `Subject:`, placeholders `{First}` `{Event}` `{Month}`
+`{STORE_LINE}`. Several events reuse the single-event wording rather than needing a second
+template: `{Event}` becomes "A, B and C" and `{Month}` becomes "season", so "your {Event} shirts
+last {Month}" reads correctly either way. The subject is the one special case, because
+"A, B and C shirts" is a poor subject line, so it becomes "Your shirts from last year".
+`{STORE_LINE}` is only filled in when the event is at least `btp_fu_store_weeks` (6) weeks out,
+because an online store takes time to set up. No name on file reads "Hi there,", never "Hi ,".
+**Nothing sends itself**: Send opens an editable preview, a person clicks, and the send is logged
+on the card. The recipient is NOT taken from the browser, so an edited preview cannot be re-aimed.

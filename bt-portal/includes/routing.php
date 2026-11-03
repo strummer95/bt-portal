@@ -38,6 +38,8 @@ function btp_tab_map() {
         'blanks'           => 'blanks',     // convenience alias
         'bruce-art'        => 'bruceart',
         'bruce'            => 'bruceart',   // convenience alias
+        'follow-up'        => 'followup',
+        'followup'         => 'followup',   // convenience alias
     ) );
 }
 
@@ -67,6 +69,7 @@ function btp_tab_labels() {
         'chipscan'  => 'Chipply Scanner',
         'blanks'    => 'Blank Orders',
         'bruceart'  => 'Bruce Art',
+        'followup'  => 'Follow Up',
         'vendors'   => 'Vendors',
     ) );
 }
@@ -93,6 +96,7 @@ function btp_tab_slugs() {
         'chipscan'  => 'chipply-scanner',
         'blanks'    => 'blank-orders',
         'bruceart'  => 'bruce-art',
+        'followup'  => 'follow-up',
         'vendors'   => 'vendors',
     );
 }
