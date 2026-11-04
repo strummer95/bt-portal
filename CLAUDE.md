@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.59.3**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.59.5**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -463,3 +463,13 @@ last {Month}" reads correctly either way. The subject is the one special case, b
 because an online store takes time to set up. No name on file reads "Hi there,", never "Hi ,".
 **Nothing sends itself**: Send opens an editable preview, a person clicks, and the send is logged
 on the card. The recipient is NOT taken from the browser, so an edited preview cannot be re-aimed.
+
+### Amount filter and bulk Never again (0.59.4, 0.59.5)
+
+0.59.4 took the popup off Never again at Dillon's request; it acts on click. 0.59.5 adds a **Last order
+under $** box next to the filter pills and a **Total** column. An event's amount is its last order
+(`e.orders[0].total`). A card passes if any event is under, the row then shows that event, and the bulk
+button (`POST /followup/ignore-bulk`, items of email + cycle + event key, cap 1000) touches only the
+events that are under, so a $45 polo does not take an $850 yearly order on the same card with it.
+On the Ignored pill the same button undoes. Bulk is click-twice-within-5s, not a popup. The page's
+`.fu-btn` click handler is scoped to `[data-act]` so it does not swallow the bulk button.

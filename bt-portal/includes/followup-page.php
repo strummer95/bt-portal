@@ -41,6 +41,9 @@ add_action('rest_api_init', function () {
     register_rest_route($ns, '/followup/ignore', array(
         'methods' => 'POST', 'permission_callback' => $perm, 'callback' => 'btp_rest_fu_ignore',
     ));
+    register_rest_route($ns, '/followup/ignore-bulk', array(
+        'methods' => 'POST', 'permission_callback' => $perm, 'callback' => 'btp_rest_fu_ignore_bulk',
+    ));
     register_rest_route($ns, '/followup/sync', array(
         array('methods' => 'GET',  'permission_callback' => $perm, 'callback' => 'btp_rest_fu_sync_state'),
         array('methods' => 'POST', 'permission_callback' => $perm, 'callback' => 'btp_rest_fu_sync_run'),
@@ -273,6 +276,47 @@ function btp_rest_fu_ignore($req) {
     }
 
     return new WP_REST_Response(array('ignored' => $on, 'event_key' => $key), 200);
+}
+
+/**
+ * Never again (or undo) for a whole filtered list at once, e.g. everything
+ * whose last order was under $100. One request instead of one per event, so
+ * a few hundred rows do not mean a few hundred round trips.
+ * items: [{contact_email, cycle_year, event_key, event_label}]
+ */
+function btp_rest_fu_ignore_bulk($req) {
+    $items = $req->get_param('items');
+    $on    = $req->get_param('ignored');
+    $on    = ($on === null) ? true : filter_var($on, FILTER_VALIDATE_BOOLEAN);
+    $note  = trim((string) $req->get_param('note'));
+
+    if (!is_array($items) || !$items) {
+        return new WP_Error('btp_fu_bad_bulk', 'Nothing to change.', array('status' => 400));
+    }
+    if (count($items) > 1000) {
+        return new WP_Error('btp_fu_bulk_big', 'That is more than 1000 at once. Narrow the filter.', array('status' => 400));
+    }
+
+    $done = 0; $failed = 0;
+    foreach ($items as $it) {
+        if (!is_array($it)) { $failed++; continue; }
+        $email = btp_fu_norm(isset($it['contact_email']) ? $it['contact_email'] : '');
+        $key   = btp_fu_norm(isset($it['event_key']) ? $it['event_key'] : '');
+        $label = trim((string) (isset($it['event_label']) ? $it['event_label'] : ''));
+        if ($email === '' || $key === '') { $failed++; continue; }
+
+        $ok = $on ? btp_fu_ignore($email, $key, $label, $note) : (btp_fu_unignore($email, $key) || true);
+        if (!$ok) { $failed++; continue; }
+        $done++;
+
+        $year = isset($it['cycle_year']) ? (int) $it['cycle_year'] : 0;
+        if ($year >= 2000) {
+            btp_fu_log(btp_fu_card_id($email, $year), 'ignore',
+                ($on ? 'Ignoring ' : 'No longer ignoring ') . ($label !== '' ? $label : $key) . ($note !== '' ? ' - ' . $note : ''));
+        }
+    }
+
+    return new WP_REST_Response(array('ignored' => $on, 'done' => $done, 'failed' => $failed), 200);
 }
 
 function btp_rest_fu_sync_state() {
@@ -531,6 +575,8 @@ function btp_follow_up_shortcode() {
       <button type="button" class="fu-pill" data-filter="ignored">Ignored</button>
       <button type="button" class="fu-pill" data-filter="all">All</button>
     </div>
+    <label class="fu-amt">Last order under $<input type="number" id="fuUnder" min="0" step="1" inputmode="decimal" placeholder="any"></label>
+    <button type="button" class="fu-btn fu-bulk" id="fuBulk" hidden></button>
   </div>
 
   <div class="fu-status" id="fuStatus"></div>
@@ -542,7 +588,7 @@ function btp_follow_up_shortcode() {
     <table class="fu-table">
       <thead><tr>
         <th>Order #</th><th>Last Year</th><th>Customer</th><th>Organization</th>
-        <th>Nickname</th><th>Event</th><th>Status</th><th></th>
+        <th>Nickname</th><th>Event</th><th>Total</th><th>Status</th><th></th>
       </tr></thead>
       <tbody id="fuBody"></tbody>
     </table>
@@ -565,6 +611,12 @@ function btp_follow_up_shortcode() {
   text-transform:uppercase; color:var(--g600); cursor:pointer; }
 #btp-fu .fu-pill:hover { border-color:var(--navy); color:var(--navy); }
 #btp-fu .fu-pill.active { background:var(--navy); border-color:var(--navy); color:#fff; }
+#btp-fu .fu-amt { display:inline-flex; align-items:center; gap:5px; font-family:'Barlow Condensed',sans-serif;
+  font-size:14px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--g600); }
+#btp-fu .fu-amt input { width:80px; border:1.5px solid var(--line); border-radius:6px; padding:4px 7px;
+  font-family:'Barlow',sans-serif; font-size:15px; }
+#btp-fu .fu-bulk { padding:4px 12px; }
+#btp-fu .fu-bulk.arm { background:var(--pink); border-color:var(--pink); color:#fff; }
 #btp-fu .fu-status { font-size:14px; color:var(--g600); margin-bottom:7px; }
 #btp-fu .fu-warn { background:#fff6e5; border:1px solid #f0c986; border-radius:6px; padding:8px 11px;
   font-size:15px; margin-bottom:9px; }
@@ -578,12 +630,13 @@ function btp_follow_up_shortcode() {
   background:var(--g100); border-bottom:2px solid var(--line); white-space:nowrap; }
 #btp-fu .fu-table th:nth-child(1) { width:8%; }
 #btp-fu .fu-table th:nth-child(2) { width:11%; }
-#btp-fu .fu-table th:nth-child(3) { width:16%; }
-#btp-fu .fu-table th:nth-child(4) { width:17%; }
-#btp-fu .fu-table th:nth-child(5) { width:14%; }
-#btp-fu .fu-table th:nth-child(6) { width:18%; }
-#btp-fu .fu-table th:nth-child(7) { width:12%; }
-#btp-fu .fu-table th:nth-child(8) { width:4%; }
+#btp-fu .fu-table th:nth-child(3) { width:15%; }
+#btp-fu .fu-table th:nth-child(4) { width:14%; }
+#btp-fu .fu-table th:nth-child(5) { width:13%; }
+#btp-fu .fu-table th:nth-child(6) { width:15%; }
+#btp-fu .fu-table th:nth-child(7) { width:8%; }
+#btp-fu .fu-table th:nth-child(8) { width:12%; }
+#btp-fu .fu-table th:nth-child(9) { width:4%; }
 #btp-fu .fu-table td { padding:10px; border-bottom:1px solid var(--line); color:var(--navy-d);
   vertical-align:middle; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #btp-fu .fu-row { cursor:pointer; }
@@ -673,6 +726,7 @@ function btp_follow_up_shortcode() {
   var CFG = <?php echo $cfg; ?>;
   var cards = [];
   var filter = 'open';
+  var under = null;                   /* "Last order under $" box, null = off */
   var openKey = null;                 /* which row is expanded */
   var collapsed = {};                 /* which groups are rolled up */
   var drafts = {};                    /* unsent edits, kept across a re-render */
@@ -718,7 +772,20 @@ function btp_follow_up_shortcode() {
     return c.status === 'reordered' || c.status === 'not_this_year' || c.status === 'ignored';
   }
 
+  /* An event's amount is its last order, the one on the row. A card passes
+     when any of its events is under, and the bulk button only touches those
+     events, so a cheap one-off does not take a big yearly order with it. */
+  function underEvents(c) {
+    if (under === null) return c.events;
+    return c.events.filter(function (e) { return Number(e.orders[0].total || 0) < under; });
+  }
+
   function matches(c) {
+    if (under !== null && !underEvents(c).length) return false;
+    return matchesPill(c);
+  }
+
+  function matchesPill(c) {
     if (filter === 'all') return true;
     if (filter === 'contacted') return c.status === 'emailed' || c.status === 'replied';
     if (filter === 'not_this_year') return c.status === 'not_this_year';
@@ -734,7 +801,9 @@ function btp_follow_up_shortcode() {
   }
 
   /* The order whose number and nickname stand for the whole row. */
-  function leadOrder(c) { return c.events[0].orders[0]; }
+  /* With the amount box set, the row shows the event that matched it. */
+  function leadEvent(c) { return underEvents(c)[0] || c.events[0]; }
+  function leadOrder(c) { return leadEvent(c).orders[0]; }
 
   /* What Never again will actually stop, named, because "ignore" on its own
      does not say whether it means this invoice, this event or this customer. */
@@ -830,11 +899,12 @@ function btp_follow_up_shortcode() {
       + '<td class="fu-cust">' + esc(c.contact_name || '-') + '</td>'
       + '<td>' + esc(c.company || '-') + '</td>'
       + '<td>' + esc(o.nickname || '-') + '</td>'
-      + '<td>' + esc(c.events[0].event) + more + '</td>'
+      + '<td>' + esc(leadEvent(c).event) + more + '</td>'
+      + '<td>' + esc(money(o.total)) + '</td>'
       + '<td><span class="fu-badge s-' + esc(c.status) + '">' + esc(STATUS_TEXT[c.status] || c.status) + '</span></td>'
       + '<td><span class="fu-chev">&#9654;</span></td>'
       + '</tr>'
-      + (open ? '<tr class="fu-detail"><td colspan="8">' + detailHtml(c) + '</td></tr>' : '');
+      + (open ? '<tr class="fu-detail"><td colspan="9">' + detailHtml(c) + '</td></tr>' : '');
   }
 
   function cardHtml(c) {
@@ -845,9 +915,9 @@ function btp_follow_up_shortcode() {
         + '<span class="fu-card-name">' + esc(c.contact_name || c.contact_email) + '</span>'
         + '<span class="fu-badge s-' + esc(c.status) + '">' + esc(STATUS_TEXT[c.status] || c.status) + '</span>'
       + '</div>'
-      + '<div class="fu-card-row">#' + esc(o.visual_id) + ' &middot; ' + esc(prettyDate(o.due_at)) + '</div>'
+      + '<div class="fu-card-row">#' + esc(o.visual_id) + ' &middot; ' + esc(prettyDate(o.due_at)) + ' &middot; ' + esc(money(o.total)) + '</div>'
       + '<div class="fu-card-row">' + esc(c.company || '') + '</div>'
-      + '<div class="fu-card-row">' + esc(c.events[0].event) + (o.nickname ? ' &middot; ' + esc(o.nickname) : '') + '</div>'
+      + '<div class="fu-card-row">' + esc(leadEvent(c).event) + (o.nickname ? ' &middot; ' + esc(o.nickname) : '') + '</div>'
       + '</div>'
       + (open ? '<div class="fu-card-det">' + detailHtml(c) + '</div>' : '');
   }
@@ -862,7 +932,7 @@ function btp_follow_up_shortcode() {
       var inGroup = shown.filter(function (c) { return c.bucket === g.key; });
       if (!inGroup.length) return;
       var isUp = !!collapsed[g.key];
-      html += '<tr class="fu-grp' + (isUp ? ' collapsed' : '') + '" data-grp="' + g.key + '"><td colspan="8">'
+      html += '<tr class="fu-grp' + (isUp ? ' collapsed' : '') + '" data-grp="' + g.key + '"><td colspan="9">'
         + '<span class="fu-grp-label"><span class="fu-grp-chev">&#9660;</span>' + g.label
         + ' <span class="fu-grp-count">' + inGroup.length + '</span></span></td></tr>';
       cardsHtml += '<div class="fu-grp-card" style="background:#1a1f5e;color:#fff;padding:7px 12px;'
@@ -876,7 +946,72 @@ function btp_follow_up_shortcode() {
     cardWrap.innerHTML = cardsHtml;
     document.getElementById('fuNone').hidden = shown.length > 0;
     if (openKey) loadDraft(openKey);
+    updateBulk(shown);
   }
+
+  /* ── bulk Never again for whatever the amount filter is showing ── */
+  var bulkArmed = false, bulkTimer = null;
+  function bulkPlan(shown) {
+    var undo = filter === 'ignored', items = [];
+    shown.forEach(function (c) {
+      underEvents(c).forEach(function (e) {
+        if (!!e.ignored !== undo) return;
+        items.push({ contact_email: c.contact_email, cycle_year: c.cycle_year,
+                     event_key: e.event_key, event_label: e.event });
+      });
+    });
+    return { undo: undo, items: items };
+  }
+  function updateBulk(shown) {
+    var b = document.getElementById('fuBulk');
+    var plan = bulkPlan(shown || cards.filter(matches));
+    if (under === null || !plan.items.length) { b.hidden = true; disarm(); return; }
+    b.hidden = false;
+    var n = plan.items.length;
+    var what = (plan.undo ? 'Follow up again' : 'Never again') + ': ' + n + ' shown';
+    b.textContent = bulkArmed ? ('Click again to confirm (' + n + ')') : what;
+    b.classList.toggle('arm', bulkArmed);
+  }
+  function disarm() {
+    bulkArmed = false;
+    if (bulkTimer) { clearTimeout(bulkTimer); bulkTimer = null; }
+    document.getElementById('fuBulk').classList.remove('arm');
+  }
+
+  document.getElementById('fuUnder').addEventListener('input', function () {
+    var v = this.value.trim();
+    under = (v === '' || isNaN(parseFloat(v))) ? null : parseFloat(v);
+    disarm();
+    render();
+  });
+
+  /* Click once to arm, again within 5s to do it. No popup; a list-wide
+     change still gets a second look. */
+  document.getElementById('fuBulk').addEventListener('click', function () {
+    var b = this;
+    if (!bulkArmed) {
+      bulkArmed = true;
+      bulkTimer = setTimeout(function () { disarm(); updateBulk(); }, 5000);
+      updateBulk();
+      return;
+    }
+    var plan = bulkPlan(cards.filter(matches));
+    disarm();
+    if (!plan.items.length) return;
+    b.disabled = true;
+    b.textContent = 'Saving...';
+    api('/followup/ignore-bulk', 'POST', { items: plan.items, ignored: !plan.undo })
+      .then(function (r) {
+        openKey = null;
+        return load().then(function () {
+          document.getElementById('fuStatus').textContent =
+            (plan.undo ? 'Following up again on ' : 'Never again set on ') + r.done + ' event(s)'
+            + (r.failed ? ', ' + r.failed + ' could not be saved' : '') + '.';
+        });
+      })
+      .catch(function (e) { document.getElementById('fuStatus').textContent = 'Could not save: ' + e.message; })
+      .then(function () { b.disabled = false; updateBulk(); });
+  });
 
   function setStatusLine(d) {
     var s = d.sync || {}, bits = [];
@@ -984,7 +1119,7 @@ function btp_follow_up_shortcode() {
       return;
     }
 
-    var btn = ev.target.closest('.fu-btn');
+    var btn = ev.target.closest('.fu-btn[data-act]');
     if (btn) {
       ev.stopPropagation();
       var panel = btn.closest('.fu-detail-in');
