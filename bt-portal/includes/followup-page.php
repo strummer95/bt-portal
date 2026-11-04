@@ -966,10 +966,6 @@ function btp_follow_up_shortcode() {
       if (!ic) return;
       var turningOn = ig.dataset.on === '1';
       var why = '';
-      if (turningOn) {
-        why = prompt('Never follow this one up again?\n\nAdd a note if you like, or just press OK.', '');
-        if (why === null) return;
-      }
       api('/followup/ignore', 'POST', {
         contact_email: ic.contact_email, cycle_year: ic.cycle_year,
         event_key: ig.dataset.ev, event_label: '', note: why || '', ignored: turningOn
@@ -1051,16 +1047,9 @@ function btp_follow_up_shortcode() {
      The single-event links in Past orders are there for the other case. */
   function doIgnore(c, panel, on) {
     var names = eventNames(c).join(', ');
-    var who   = c.contact_name || c.contact_email;
     var note  = '';
-    if (on) {
-      note = prompt('Never remind you about ' + names + ' for ' + who + ' again?'
-        + String.fromCharCode(10) + String.fromCharCode(10)
-        + 'This is for one-off jobs. It does not stop anything else they order.'
-        + String.fromCharCode(10)
-        + 'Add a note if you want, or just press OK.', '');
-      if (note === null) return;
-    } else if (!confirm('Start following up ' + names + ' again?')) {
+    /* Never again acts on click, no popup (0.59.4). Undo is under the Ignored filter. */
+    if (!on && !confirm('Start following up ' + names + ' again?')) {
       return;
     }
     var chain = Promise.resolve();
