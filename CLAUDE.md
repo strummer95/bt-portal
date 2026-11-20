@@ -488,10 +488,14 @@ only:** no REST, no table, no upload. The engine runs in a Web Worker built from
   un-premultiplied RGB (decoded with `premultiplyAlpha:'none'`), so a faded red is dots of real red.
 - Dot area is linear in opacity: `radiusFor()` inverts the coverage of a round dot clipped by its
   cell (full cover only at r = sqrt(0.5) of the cell). Alpha is averaged over each cell; at or above
-  "Solid above" a pixel prints solid; below "Smallest dot kept" a cell prints nothing.
+  "Solid above" (default 97) a pixel prints solid. **Below "Smallest dot kept" dots stop shrinking and
+  thin out instead**: a min-size dot in a fraction a/minDot of cells (repeatable per-cell hash). The
+  first build dropped those cells outright and Dillon saw a hard cut-off ring; do not go back to that.
+- **Preview downscaling matters.** Shrinking the dot pattern in one `drawImage` step skips pixels and
+  made the dots look harsh with a solid core, nothing like the original. `paint()` halves repeatedly
+  so each step averages. Left preview has two modes: As designed (default, the goal) and As DTF
+  prints it today (fade toward white underbase, the pink problem).
 - Output defaults to 2x pixels (300 DPI in, 600 DPI out, same print size) because at 300 DPI / 45 LPI a
   cell is 6.7px and the dots come out as blocky crosses. The pHYs chunk is written so RIPs size it right.
-- The left preview deliberately simulates the underbase (colour faded toward white, not toward the
-  shirt) so the pink problem is visible next to the fix.
 - `btSwitchTab()` calls `btpHalftonerShow()` to redraw, since a canvas fitted while hidden is 0 wide.
 - Only transparency is dotted. An image with no alpha (JPG) is left solid and the status line says so.

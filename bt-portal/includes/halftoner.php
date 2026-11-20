@@ -79,10 +79,10 @@ function btp_halftoner_shortcode() {
 
   <label>Smallest dot kept</label>
   <div class="ht-row"><input id="btp-ht-min" type="range" min="0" max="30" step="1" value="8"><span class="ht-val" id="btp-ht-minV"></span></div>
-  <div class="ht-hint">Fainter than this is dropped. Raise it if tiny dots flake off.</div>
+  <div class="ht-hint">Dots never get smaller than this; fainter areas get fewer of them instead. Raise it if tiny dots flake off.</div>
 
   <label>Solid above</label>
-  <div class="ht-row"><input id="btp-ht-solid" type="range" min="70" max="100" step="1" value="95"><span class="ht-val" id="btp-ht-solidV"></span></div>
+  <div class="ht-row"><input id="btp-ht-solid" type="range" min="70" max="100" step="1" value="97"><span class="ht-val" id="btp-ht-solidV"></span></div>
   <div class="ht-hint">At least this opaque prints as solid ink.</div>
 
   <label>Image DPI</label>
@@ -95,6 +95,9 @@ function btp_halftoner_shortcode() {
 
   <label>Preview shirt color</label>
   <div class="ht-row"><input id="btp-ht-shirt" type="color" value="#111111" style="width:44px;height:28px;border:0;padding:0;background:none"><span class="ht-hint">Preview only, not in the file.</span></div>
+
+  <label>Left preview</label>
+  <select id="btp-ht-left"><option value="design">As designed (the goal)</option><option value="dtf">As DTF prints it today (pink)</option></select>
 
   <label>Zoom</label>
   <select id="btp-ht-zoom"><option value="fit">Fit</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select>
@@ -111,7 +114,7 @@ function btp_halftoner_shortcode() {
   <div class="ht-files" id="btp-ht-files"></div>
   <div class="ht-status" id="btp-ht-status"></div>
   <div class="ht-panes">
-    <div class="ht-pane"><h3>Original, as DTF prints it (white underbase)</h3><div class="ht-stage" id="btp-ht-s1"><canvas id="btp-ht-cin"></canvas></div></div>
+    <div class="ht-pane"><h3 id="btp-ht-lefth">Original</h3><div class="ht-stage" id="btp-ht-s1"><canvas id="btp-ht-cin"></canvas></div></div>
     <div class="ht-pane"><h3>Halftoned</h3><div class="ht-stage" id="btp-ht-s2"><canvas id="btp-ht-cout"></canvas></div></div>
   </div>
 </div>
@@ -145,6 +148,11 @@ function btp_halftoner_shortcode() {
       lut[T] = R_MAX;
       return lut;
     }
+    function hash(i, j) { // repeatable 0..1 per cell, so re-runs do not shimmer
+      var h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) | 0;
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    }
     function radiusFor(c) { return LUT[Math.round(Math.min(1, Math.max(0, c)) * 1024)]; }
 
     function halftone(src, w, h, s) {
@@ -170,7 +178,16 @@ function btp_halftoner_shortcode() {
         var cx = u * co - vv * si, cy = u * si + vv * co, q = cell * .25;
         // average over the cell so dots follow the fade, not single noisy pixels
         var a = (A(cx, cy) * 2 + A(cx - q, cy - q) + A(cx + q, cy - q) + A(cx - q, cy + q) + A(cx + q, cy + q)) / 6;
-        v = [cx, cy, a < s.minDot ? -1 : radiusFor(a) * cell];
+        var r = -1;
+        if (a >= s.minDot) r = radiusFor(a) * cell;
+        else if (a > 0.004 && s.minDot > 0) {
+          // Below the smallest printable dot, dots stop shrinking and start
+          // thinning out: keep a minimum-size dot in a fraction a/minDot of
+          // cells, so the ink area still matches the opacity and the fade
+          // trails off into scattered dots instead of stopping at a line.
+          if (hash(i, j) < a / s.minDot) r = radiusFor(s.minDot) * cell;
+        }
+        v = [cx, cy, r];
         cache.set(key, v);
         return v;
       }
@@ -244,6 +261,7 @@ function btp_halftoner_shortcode() {
   });
   el('shirt').addEventListener('input', paintBoth);
   el('zoom').addEventListener('change', paintBoth);
+  el('left').addEventListener('change', paintBoth);
   labels();
 
   /* ---------- loading files ---------- */
@@ -338,32 +356,52 @@ function btp_halftoner_shortcode() {
     status(t);
   }
 
-  function paint(canvas, stage, w, h, data, fitW) {
-    canvas.width = w; canvas.height = h;
-    var g = canvas.getContext('2d'), sh = el('shirt').value;
+  // mode 'design': blend into the shirt (what the artist meant).
+  // mode 'dtf': DTF puts white underbase under anything with ink at all, so a
+  // see-through pixel fades toward WHITE, not the shirt. That is the pink problem.
+  // The halftoned side is all 0 or 255, so either rule draws it exactly.
+  function paint(canvas, stage, w, h, data, fitW, mode) {
+    var sh = el('shirt').value;
     var sr = parseInt(sh.slice(1, 3), 16), sg = parseInt(sh.slice(3, 5), 16), sb = parseInt(sh.slice(5, 7), 16);
-    var img = g.createImageData(w, h), o = img.data;
-    // DTF puts white underbase under anything with ink at all, so a see-through
-    // pixel shows up as its colour faded toward WHITE, not toward the shirt.
-    // That is the pink problem; drawing it this way makes it visible. The
-    // halftoned side is all 0 or 255, so the same rule draws it exactly.
+    var full = document.createElement('canvas'); full.width = w; full.height = h;
+    var fg = full.getContext('2d'), img = fg.createImageData(w, h), o = img.data;
     for (var p = 0; p < o.length; p += 4) {
-      var a = data[p + 3] / 255;
-      if (a < 0.02) { o[p] = sr; o[p + 1] = sg; o[p + 2] = sb; }
-      else { o[p] = data[p] * a + 255 * (1 - a); o[p + 1] = data[p + 1] * a + 255 * (1 - a); o[p + 2] = data[p + 2] * a + 255 * (1 - a); }
-      o[p + 3] = 255;
+      var a = data[p + 3] / 255, br = sr, bg = sg, bb = sb;
+      if (mode === 'dtf' && a >= 0.02) { br = bg = bb = 255; }
+      o[p] = data[p] * a + br * (1 - a); o[p + 1] = data[p + 1] * a + bg * (1 - a); o[p + 2] = data[p + 2] * a + bb * (1 - a); o[p + 3] = 255;
     }
-    g.putImageData(img, 0, 0);
+    fg.putImageData(img, 0, 0);
     var z = el('zoom').value, f = (fitW || w) / w;
     var scale = (z === 'fit' ? Math.min((stage.clientWidth - 2) / (w * f), (stage.clientHeight - 2) / (h * f), 1) : +z) * f;
-    canvas.style.width = (w * scale) + 'px'; canvas.style.height = (h * scale) + 'px';
-    canvas.style.imageRendering = scale >= 1 ? 'pixelated' : 'auto';
+    var dw = Math.max(1, Math.round(w * scale)), dh = Math.max(1, Math.round(h * scale));
+    if (scale >= 1) {
+      canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(full, 0, 0);
+      canvas.style.imageRendering = 'pixelated';
+    } else {
+      // Shrinking a dot pattern in one step skips most pixels and makes the
+      // dots look harsher and sparser than they print. Halve repeatedly so
+      // every step averages, which is what the eye does from a few feet away.
+      var dpr = window.devicePixelRatio || 1, tw = Math.min(w, Math.round(dw * dpr)), th = Math.min(h, Math.round(dh * dpr));
+      var src = full, cw = w, ch = h;
+      while (cw / 2 >= tw && ch / 2 >= th) {
+        var nw = Math.round(cw / 2), nh = Math.round(ch / 2), step = document.createElement('canvas');
+        step.width = nw; step.height = nh;
+        var sg2 = step.getContext('2d'); sg2.imageSmoothingQuality = 'high'; sg2.drawImage(src, 0, 0, cw, ch, 0, 0, nw, nh);
+        src = step; cw = nw; ch = nh;
+      }
+      canvas.width = tw; canvas.height = th;
+      var cg = canvas.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(src, 0, 0, cw, ch, 0, 0, tw, th);
+      canvas.style.imageRendering = 'auto';
+    }
+    canvas.style.width = dw + 'px'; canvas.style.height = dh + 'px';
   }
   function paintBoth() {
     if (cur < 0) return;
     var it = items[cur];
-    paint(el('cin'), el('s1'), it.w, it.h, it.data);
-    if (it.out) paint(el('cout'), el('s2'), it.out.w, it.out.h, it.out.data, it.w);
+    var mode = el('left').value;
+    el('lefth').textContent = mode === 'dtf' ? 'Original, as DTF prints it today (white underbase)' : 'Original, as designed';
+    paint(el('cin'), el('s1'), it.w, it.h, it.data, 0, mode);
+    if (it.out) paint(el('cout'), el('s2'), it.out.w, it.out.h, it.out.data, it.w, 'design');
     else { var c = el('cout'); c.width = c.height = 0; }
   }
   window.addEventListener('resize', function () { if (el('s1').offsetParent) paintBoth(); });
