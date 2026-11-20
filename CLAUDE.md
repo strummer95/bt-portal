@@ -133,6 +133,25 @@ Portal logins replaced a shared WordPress page password and a "Who are you?" nam
 - Five failed attempts triggers a 15 minute cooldown; **Unlock** on Portal Users clears it.
 - The portal page is excluded from page caching, since it renders the signed-in name.
 
+### Google sign-in (0.60.0)
+
+Verified against Google's own `tokeninfo` endpoint (`btp_verify_google_id_token()` in
+`users.php`) — aud/iss/exp/`email_verified` all checked — rather than local JWKS, so there is
+no new dependency in the zip. `BTP_GOOGLE_CLIENT_ID` (wp-config) or the `btp_google_client_id`
+option (set on **BT Portal → Portal Users**, WordPress admin only) holds the OAuth Web client
+ID; it is not a secret, it ships to the browser by design. The button is hidden everywhere
+until one is set.
+
+First sign-in auto-links onto an existing portal account only when the verified Google email
+matches that account's own email and it has no Google link yet — never by email alone without
+that match, never creating a new account. After that, sign-in is by `sub` alone and always
+"remembered" (`wp_set_auth_cookie($id, true, ...)`, no checkbox on this path). The in-portal
+account panel (open from the header name) also offers **Link Google account** / **Unlink**
+while already signed in with a password; linking there has no email-match requirement, only a
+409 if that Google `sub` is already linked to a *different* portal account. Unlinking never
+locks anyone out — the password still works. A failed Google sign-in buys the same per-IP 15
+minute cooldown as a failed password one, keyed separately so the two don't share a budget.
+
 ## Security issue fixed, pending Dillon's confirmation before deploy
 
 `includes/rest.php` used to register the legacy `boomerts/v1` routes with

@@ -184,6 +184,8 @@ add_shortcode( 'bt_schedule', function() {
   font-weight:700; letter-spacing:.07em; cursor:pointer; transition:background .15s; }
 #btpAcctPanel .btp-acct-btn:hover { background:#232875; }
 #btpAcctPanel .btp-acct-btn[disabled] { opacity:.5; cursor:default; }
+#btpAcctPanel .btp-acct-btn-ghost { background:#fff; color:#9ca3b8; border:1px solid #e8eaf0; }
+#btpAcctPanel .btp-acct-btn-ghost:hover { background:#fdecea; color:#7d2018; border-color:#fdecea; }
 #btpAcctPanel .btp-acct-rule { display:flex; align-items:center; gap:10px; margin:26px 0 16px;
   font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.07em;
   text-transform:uppercase; color:#9ca3b8; }
@@ -1165,6 +1167,16 @@ add_shortcode( 'bt_schedule', function() {
           <button type="button" class="btp-acct-btn" id="btpAcctResetBtn" onclick="btpAcctResetSelf()">
             EMAIL ME A PASSWORD RESET LINK
           </button>
+
+          <div class="btp-acct-field" id="btpAcctGoogleWrap" style="display:none;margin-top:18px;">
+            <label>Google account</label>
+            <div class="btp-acct-fixed" id="btpAcctGoogleStatus">&mdash;</div>
+            <div id="btpAcctGoogleLinkBtn" style="margin-top:8px;"></div>
+            <button type="button" class="btp-acct-btn btp-acct-btn-ghost" id="btpAcctGoogleUnlinkBtn"
+                    onclick="btpAcctGoogleUnlink()" style="display:none;">
+              UNLINK GOOGLE ACCOUNT
+            </button>
+          </div>
         </div>
 
         <div id="btpAcctAdmin" style="display:none;">
@@ -1701,9 +1713,22 @@ add_shortcode( 'bt_schedule', function() {
   <div class="context-item edit-item" onclick="btEditFromContext()">✏️ Edit Full Details</div>
 </div>
 
+<?php if ( btp_google_client_id() ) : ?>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<?php endif; ?>
 <script>
 const btAPI   = '<?php echo esc_js( $api_base ); ?>';
 const btNonce = '<?php echo wp_create_nonce("wp_rest"); ?>';
+const btpGoogleClientId = <?php echo wp_json_encode( btp_google_client_id() ); ?>;
+let btpGoogleReady = false;
+// Google's own library calls this automatically once loaded — not window.onload,
+// since the script tag is async/defer and finishes at an unpredictable time.
+window.onGoogleLibraryLoad = function () {
+  btpGoogleReady = true;
+  if (btpGoogleClientId) {
+    google.accounts.id.initialize({ client_id: btpGoogleClientId, callback: btpAcctGoogleCallback });
+  }
+};
 
 /* ── URL routing ──
    Each tab gets its own address: /employees/exchanges. On a site without
@@ -4505,6 +4530,7 @@ async function btpAcctLoad() {
     btpAcctData = me;
     document.getElementById('btpAcctLogin').textContent = me.login;
     document.getElementById('btpAcctEmail').textContent = me.email;
+    btpAcctRenderGoogle(me);
 
     if (!me.can_manage) {
       document.getElementById('btpAcctAdmin').style.display = 'none';
@@ -4708,6 +4734,66 @@ async function btpAcctResetSelf() {
     btpAcctMsg('Sent to ' + res.email + '. Open it and pick a new password — good for 24 hours.', 'ok');
   } catch (e) {
     btpAcctMsg('Could not send that email. Try again shortly.', 'err');
+  }
+  btn.disabled = false;
+}
+
+function btpAcctRenderGoogle(me) {
+  const wrap = document.getElementById('btpAcctGoogleWrap');
+  if (!me.google_enabled) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  const status   = document.getElementById('btpAcctGoogleStatus');
+  const linkBtn  = document.getElementById('btpAcctGoogleLinkBtn');
+  const unlinkBtn = document.getElementById('btpAcctGoogleUnlinkBtn');
+
+  if (me.google_linked) {
+    status.textContent = me.google_email || 'Linked';
+    linkBtn.style.display = 'none';
+    linkBtn.innerHTML = '';
+    unlinkBtn.style.display = 'block';
+  } else {
+    status.textContent = 'Not linked';
+    unlinkBtn.style.display = 'none';
+    linkBtn.style.display = 'block';
+    btpAcctRenderGoogleLinkButton();
+  }
+}
+
+function btpAcctRenderGoogleLinkButton() {
+  const el = document.getElementById('btpAcctGoogleLinkBtn');
+  if (!el) return;
+  if (!btpGoogleReady || typeof google === 'undefined') {
+    // The GIS script is async/defer — give it a moment to finish loading.
+    setTimeout(btpAcctRenderGoogleLinkButton, 300);
+    return;
+  }
+  el.innerHTML = '';
+  google.accounts.id.renderButton(el, { theme: 'outline', size: 'medium', text: 'continue_with' });
+}
+
+/* Shared with the main initialize() call set up at the top of this script,
+   since one Google Identity Services client handles both login and linking. */
+async function btpAcctGoogleCallback(resp) {
+  try {
+    const r = await btFetch('/account/google-link', 'POST', { credential: resp.credential });
+    btpAcctMsg('Google account linked (' + r.email + ').', 'ok');
+    btpAcctLoad();
+  } catch (e) {
+    btpAcctMsg(e && e.detail ? e.detail : 'Could not link that Google account.', 'err');
+  }
+}
+
+async function btpAcctGoogleUnlink() {
+  if (!confirm('Unlink your Google account? You can still sign in with your password.')) return;
+  const btn = document.getElementById('btpAcctGoogleUnlinkBtn');
+  btn.disabled = true;
+  try {
+    await btFetch('/account/google-unlink', 'POST', {});
+    btpAcctMsg('Google account unlinked.', 'ok');
+    btpAcctLoad();
+  } catch (e) {
+    btpAcctMsg('Could not unlink that.', 'err');
   }
   btn.disabled = false;
 }
