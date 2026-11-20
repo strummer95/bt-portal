@@ -34,7 +34,6 @@ require_once BTP_DIR . 'includes/chipply-barcoder.php'; // Chipply PDF barcoder 
 require_once BTP_DIR . 'includes/chipply-scanner.php';  // Chipply order scanner (Other > Chipply Scanner)
 require_once BTP_DIR . 'includes/blank-orders.php';     // order sheet photos -> blank tally (Other > Blank Orders)
 require_once BTP_DIR . 'includes/bruce-art.php';        // Bruce site embed (Other > Bruce Art)
-require_once BTP_DIR . 'includes/halftoner.php';        // DTF fades -> printed dots (Other > Halftoner)
 require_once BTP_DIR . 'includes/followup.php';         // reorder outreach: Printavo sync + the rules
 require_once BTP_DIR . 'includes/followup-mail.php';    // the outreach email, sent via Microsoft Graph
 require_once BTP_DIR . 'includes/followup-page.php';    // Other > Follow Up: endpoints, admin, the page
