@@ -2,14 +2,14 @@
 /*
 Plugin Name: BT Portal
 Plugin URI: https://boomerts.com
-Description: Boomer T's employee portal — schedule board, online stores, quote, redirect, contacts, exchange tracking, OMG scanner, Chipply scanner, Blank Orders, Bruce Art, day notes/capacity, backups, and the [bt_schedule] shortcode.
-Version: 0.59.5
+Description: Boomer T's employee portal — schedule board, online stores, quote, redirect, contacts, exchange tracking, OMG scanner, Chipply scanner, Blank Orders, Bruce Art, Halftoner, day notes/capacity, backups, and the [bt_schedule] shortcode.
+Version: 0.60.0
 Author: Duck and Rabbit Co.
 */
 
 if (!defined('ABSPATH')) exit;
 
-define('BTP_VERSION', '0.59.5');
+define('BTP_VERSION', '0.60.0');
 define('BTP_DIR', plugin_dir_path(__FILE__));
 define('BTP_URL', plugin_dir_url(__FILE__));
 define('BTP_FILE', __FILE__);
@@ -34,6 +34,7 @@ require_once BTP_DIR . 'includes/chipply-barcoder.php'; // Chipply PDF barcoder 
 require_once BTP_DIR . 'includes/chipply-scanner.php';  // Chipply order scanner (Other > Chipply Scanner)
 require_once BTP_DIR . 'includes/blank-orders.php';     // order sheet photos -> blank tally (Other > Blank Orders)
 require_once BTP_DIR . 'includes/bruce-art.php';        // Bruce site embed (Other > Bruce Art)
+require_once BTP_DIR . 'includes/halftoner.php';        // DTF fades -> printed dots (Other > Halftoner)
 require_once BTP_DIR . 'includes/followup.php';         // reorder outreach: Printavo sync + the rules
 require_once BTP_DIR . 'includes/followup-mail.php';    // the outreach email, sent via Microsoft Graph
 require_once BTP_DIR . 'includes/followup-page.php';    // Other > Follow Up: endpoints, admin, the page

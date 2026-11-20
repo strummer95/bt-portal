@@ -1,11 +1,11 @@
 # BT Portal
 
 Boomer T's employee portal. Schedule board, online stores, quote tab, redirect tool,
-contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT Accounts orders, Bruce Art, day notes, backups, and the
+contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT Accounts orders, Bruce Art, Halftoner, day notes, backups, and the
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.59.5**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.60.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -65,7 +65,7 @@ using it, and what actually caused it when a bug is being fixed.
 `redirect.php` (`/stores/` redirects, `[bt_redirect_tab]`) · `woo.php` ·
 `dtf-jobs.php` (DTF Studio orders → Transfers cards) · `exchanges.php` ·
 `exchange-mail.php` · `exchanges-diag.php` · `omg-scanner.php` · `printavo.php` ·
-`chipply-barcoder.php` (hidden) · `chipply-scanner.php` · `blank-orders.php` · `bruce-art.php` · `routing.php` (`/employees/<tab>`
+`chipply-barcoder.php` (hidden) · `chipply-scanner.php` · `blank-orders.php` · `bruce-art.php` · `halftoner.php` · `routing.php` (`/employees/<tab>`
 deep links) · `bt-admin.php` · `admin.php` · `updater.php`
 
 The plugin is a port of the old BT-Sched WPCode snippets (1 = DB, 2 = API, 3 = Frontend,
@@ -473,3 +473,25 @@ button (`POST /followup/ignore-bulk`, items of email + cycle + event key, cap 10
 events that are under, so a $45 polo does not take an $850 yearly order on the same card with it.
 On the Ignored pill the same button undoes. Bulk is click-twice-within-5s, not a popup. The page's
 `.fu-btn` click handler is scoped to `[data-act]` so it does not swallow the bulk button.
+
+## Other > Halftoner (0.60.0)
+
+`includes/halftoner.php`, shortcode `[bt_halftoner]`, tab id `halftoner`, slug `halftoner` (alias
+`halftone`). Converts the partly transparent parts of a DTF design into printed AM dots. **Browser
+only:** no REST, no table, no upload. The engine runs in a Web Worker built from `htEngine.toString()`.
+
+- **Why it exists.** DTF puts white underbase under any inked pixel, so 50% red prints as pink, not
+  as red blended into the shirt. Commercial halftone tools keep the design solid and punch holes in
+  it. Dillon wants the opposite, screen print style: solid stays solid, the fade becomes dots of
+  full-strength ink that shrink to nothing.
+- **Output rule, do not break it:** every pixel is alpha 0 or 255. Dot colour is the pixel's own
+  un-premultiplied RGB (decoded with `premultiplyAlpha:'none'`), so a faded red is dots of real red.
+- Dot area is linear in opacity: `radiusFor()` inverts the coverage of a round dot clipped by its
+  cell (full cover only at r = sqrt(0.5) of the cell). Alpha is averaged over each cell; at or above
+  "Solid above" a pixel prints solid; below "Smallest dot kept" a cell prints nothing.
+- Output defaults to 2x pixels (300 DPI in, 600 DPI out, same print size) because at 300 DPI / 45 LPI a
+  cell is 6.7px and the dots come out as blocky crosses. The pHYs chunk is written so RIPs size it right.
+- The left preview deliberately simulates the underbase (colour faded toward white, not toward the
+  shirt) so the pink problem is visible next to the fix.
+- `btSwitchTab()` calls `btpHalftonerShow()` to redraw, since a canvas fitted while hidden is 0 wide.
+- Only transparency is dotted. An image with no alpha (JPG) is left solid and the status line says so.
