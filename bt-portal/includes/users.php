@@ -260,6 +260,123 @@ function btp_handle_login() {
 }
 add_action('template_redirect', 'btp_handle_login', 5);
 
+/* ─────────────────────────────────────────────────────────────────────────
+   GOOGLE SIGN-IN
+
+   Dillon: "google sign ins on all my projects, remember login, and a way to
+   turn previous accounts into google logins." The client ID is a public OAuth
+   identifier (shipped to the browser by design), not a secret — it lives in
+   BTP_GOOGLE_CLIENT_ID (wp-config) or the btp_google_client_id option, set on
+   BT Portal > Portal Users by a WordPress administrator.
+
+   Verification is a live call to Google's own tokeninfo endpoint (same model
+   as every other project this cycle) rather than local JWKS/signature
+   checking, so there is no new dependency to ship in a WordPress zip.
+   ───────────────────────────────────────────────────────────────────── */
+
+function btp_google_client_id() {
+    if (defined('BTP_GOOGLE_CLIENT_ID') && BTP_GOOGLE_CLIENT_ID) return (string) BTP_GOOGLE_CLIENT_ID;
+    return (string) get_option('btp_google_client_id', '');
+}
+
+/** Verify a Google ID token against Google's own tokeninfo endpoint. Returns array(sub, email) or WP_Error. */
+function btp_verify_google_id_token($credential) {
+    $credential = (string) $credential;
+    if ($credential === '') return new WP_Error('btp_google_empty', 'No Google credential received.');
+
+    $client_id = btp_google_client_id();
+    if ($client_id === '') return new WP_Error('btp_google_unconfigured', 'Google sign-in is not set up.');
+
+    $resp = wp_remote_get(
+        'https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($credential),
+        array('timeout' => 10)
+    );
+    if (is_wp_error($resp)) return $resp;
+    if ((int) wp_remote_retrieve_response_code($resp) !== 200) {
+        return new WP_Error('btp_google_bad_token', 'That Google sign-in could not be verified.');
+    }
+
+    $body = json_decode(wp_remote_retrieve_body($resp), true);
+    if (!is_array($body)) return new WP_Error('btp_google_bad_token', 'That Google sign-in could not be verified.');
+
+    $aud      = (string) ($body['aud'] ?? '');
+    $iss      = (string) ($body['iss'] ?? '');
+    $sub      = (string) ($body['sub'] ?? '');
+    $exp      = (int) ($body['exp'] ?? 0);
+    $email    = strtolower(trim((string) ($body['email'] ?? '')));
+    $verified = in_array($body['email_verified'] ?? '', array('true', true, '1', 1), true);
+
+    if ($client_id === '' || !hash_equals($client_id, $aud)) {
+        return new WP_Error('btp_google_aud', 'That sign-in was issued for a different site.');
+    }
+    if (!in_array($iss, array('accounts.google.com', 'https://accounts.google.com'), true)) {
+        return new WP_Error('btp_google_iss', 'That sign-in did not come from Google.');
+    }
+    if ($exp < time()) return new WP_Error('btp_google_expired', 'That sign-in has expired. Try again.');
+    if ($sub === '' || !$verified || $email === '') {
+        return new WP_Error('btp_google_unverified', 'That Google account email is not verified.');
+    }
+
+    return array('sub' => $sub, 'email' => $email);
+}
+
+/** The portal/admin account already linked to this Google subject, if any. */
+function btp_user_by_google_sub($sub) {
+    $sub = (string) $sub;
+    if ($sub === '') return null;
+    $users = get_users(array(
+        'meta_key'   => 'btp_google_sub',
+        'meta_value' => $sub,
+        'number'     => 1,
+    ));
+    return $users ? $users[0] : null;
+}
+
+function btp_handle_google_login() {
+    if (empty($_POST['btp_google_submit']) || empty($_POST['btp_google_credential'])) return;
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'btp_login_google')) {
+        $GLOBALS['btp_login_error'] = 'This page had been sitting open too long. Try again.';
+        return;
+    }
+
+    $key = 'btp_fail_google_' . md5(btp_client_ip());
+    if ((int) get_transient($key) >= 5) {
+        $GLOBALS['btp_login_error'] = 'Too many attempts. Try again in 15 minutes.';
+        return;
+    }
+
+    $claim = btp_verify_google_id_token(wp_unslash($_POST['btp_google_credential']));
+    $user  = is_wp_error($claim) ? null : btp_user_by_google_sub($claim['sub']);
+
+    // Auto-link only on first use, and only onto an existing portal account
+    // whose own email already matches the verified Google email — never onto
+    // an arbitrary account by email alone, and never create a new account.
+    if (!$user && !is_wp_error($claim)) {
+        $existing = get_user_by('email', $claim['email']);
+        if ($existing && user_can($existing, 'bt_portal_access')
+            && !get_user_meta($existing->ID, 'btp_google_sub', true)) {
+            update_user_meta($existing->ID, 'btp_google_sub', $claim['sub']);
+            update_user_meta($existing->ID, 'btp_google_email', $claim['email']);
+            $user = $existing;
+        }
+    }
+
+    if (!$user || !user_can($user, 'bt_portal_access')) {
+        set_transient($key, (int) get_transient($key) + 1, 15 * MINUTE_IN_SECONDS);
+        // Deliberately vague, same reasoning as the password login above.
+        $GLOBALS['btp_login_error'] = 'Could not sign in with that Google account.';
+        return;
+    }
+
+    delete_transient($key);
+    wp_set_current_user($user->ID);
+    wp_set_auth_cookie($user->ID, true, is_ssl());   // Google sign-in is always "remembered"
+    do_action('wp_login', $user->user_login, $user);  // stamps btp_last_login, same as wp_signon's own login
+    wp_safe_redirect(btp_current_url());
+    exit;
+}
+add_action('template_redirect', 'btp_handle_google_login', 5);
+
 /**
  * The set-a-password flow.
  *
@@ -460,7 +577,38 @@ function btp_login_screen_html() {
 
     <a class="btp-login-forgot"
        href="<?php echo esc_url(wp_lostpassword_url(btp_current_url())); ?>">Forgot your password?</a>
+
+    <?php $google_client_id = btp_google_client_id(); if ($google_client_id) : ?>
+      <div class="btp-login-rule"><span>or</span></div>
+      <div id="btpGoogleBtn" class="btp-login-google"></div>
+    <?php endif; ?>
   </form>
+
+  <?php if ($google_client_id) : ?>
+    <form method="post" id="btpGoogleForm" style="display:none;">
+      <?php wp_nonce_field('btp_login_google'); ?>
+      <input type="hidden" name="btp_google_credential" id="btpGoogleCredential">
+      <input type="hidden" name="btp_google_submit" value="1">
+    </form>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+      function btpGoogleOnCredential(resp) {
+        document.getElementById('btpGoogleCredential').value = resp.credential;
+        document.getElementById('btpGoogleForm').submit();
+      }
+      // Google's own client library calls this automatically once loaded —
+      // not window.onload, since async/defer finish at an unpredictable time.
+      window.onGoogleLibraryLoad = function () {
+        google.accounts.id.initialize({
+          client_id: <?php echo wp_json_encode($google_client_id); ?>,
+          callback: btpGoogleOnCredential
+        });
+        google.accounts.id.renderButton(document.getElementById('btpGoogleBtn'), {
+          theme: 'outline', size: 'large', width: 280
+        });
+      };
+    </script>
+  <?php endif; ?>
 </div>
 <?php echo btp_login_styles(); ?>
     <?php
@@ -555,6 +703,12 @@ function btp_login_styles() {
 #btp-login .btp-login-forgot { display:block; text-align:center; margin-top:16px; font-size:12px;
   color:#9ca3b8; text-decoration:none; }
 #btp-login .btp-login-forgot:hover { color:#e91e8c; }
+#btp-login .btp-login-rule { display:flex; align-items:center; gap:10px; margin:18px 0 4px;
+  font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:#9ca3b8; }
+#btp-login .btp-login-rule:before, #btp-login .btp-login-rule:after { content:''; flex:1;
+  height:1px; background:#e8eaf0; }
+#btp-login .btp-login-google { display:flex; justify-content:center; margin-top:12px; }
 </style>
 CSS;
 }
@@ -634,6 +788,38 @@ function btp_users_page() {
           <p><strong>Not set up yet:</strong> <?php echo esc_html(implode(', ', $unclaimed)); ?>.
           Anyone without an account cannot open the portal.</p>
         </div>
+      <?php endif; ?>
+
+      <?php if (current_user_can('manage_options')) :
+        $google_fixed = defined('BTP_GOOGLE_CLIENT_ID') && BTP_GOOGLE_CLIENT_ID; ?>
+      <h2>Google sign-in</h2>
+      <form method="post">
+        <?php wp_nonce_field('btp_google_settings'); ?>
+        <input type="hidden" name="btp_admin_action" value="google_settings">
+        <table class="form-table" role="presentation">
+          <tr>
+            <th scope="row"><label for="btp_google_client_id">Client ID</label></th>
+            <td>
+              <input name="btp_google_client_id" id="btp_google_client_id" type="text" class="regular-text"
+                     value="<?php echo esc_attr(btp_google_client_id()); ?>"
+                     <?php disabled($google_fixed); ?>>
+              <p class="description">
+                <?php if ($google_fixed) : ?>
+                  Set in wp-config as <code>BTP_GOOGLE_CLIENT_ID</code>; this field is disabled while
+                  that constant exists.
+                <?php else : ?>
+                  The OAuth 2.0 Web application Client ID from Google Cloud Console. This is not a
+                  secret &mdash; it is shipped to every browser that loads the login page. JS origin
+                  to register: <code><?php echo esc_html(home_url()); ?></code>. Leave blank to hide
+                  the Google button everywhere.
+                <?php endif; ?>
+              </p>
+            </td>
+          </tr>
+        </table>
+        <?php submit_button('Save', 'secondary', 'submit', false); ?>
+      </form>
+      <hr>
       <?php endif; ?>
 
       <h2>Add a user</h2>
@@ -789,6 +975,19 @@ function btp_users_handle_post() {
     if ($action === 'add') {
         check_admin_referer('btp_add_user');
         btp_users_add();
+        return;
+    }
+
+    if ($action === 'google_settings') {
+        check_admin_referer('btp_google_settings');
+        if (!current_user_can('manage_options')) return;
+        if (!defined('BTP_GOOGLE_CLIENT_ID') || !BTP_GOOGLE_CLIENT_ID) {
+            $cid = sanitize_text_field(wp_unslash($_POST['btp_google_client_id'] ?? ''));
+            update_option('btp_google_client_id', $cid, false);
+            btp_users_notice($cid
+                ? 'Google client ID saved. The Google button will appear on the login page.'
+                : 'Google client ID cleared. The Google button is hidden until one is set.');
+        }
         return;
     }
 
@@ -981,6 +1180,14 @@ add_action('rest_api_init', function() {
         'methods' => 'POST', 'callback' => 'btp_rest_account_reset',
         'permission_callback' => 'btp_rest_can_access'));
 
+    register_rest_route($ns, '/account/google-link', array(
+        'methods' => 'POST', 'callback' => 'btp_rest_account_google_link',
+        'permission_callback' => 'btp_rest_can_access'));
+
+    register_rest_route($ns, '/account/google-unlink', array(
+        'methods' => 'POST', 'callback' => 'btp_rest_account_google_unlink',
+        'permission_callback' => 'btp_rest_can_access'));
+
     register_rest_route($ns, '/account/users', array(
         'methods' => 'GET', 'callback' => 'btp_rest_users',
         'permission_callback' => 'btp_rest_can_manage'));
@@ -1026,8 +1233,11 @@ function btp_rest_user_row($u) {
 function btp_rest_account() {
     $u = wp_get_current_user();
     $row = btp_rest_user_row($u);
-    $row['can_manage']    = current_user_can('bt_manage_portal_users');
-    $row['legacy_names']  = btp_legacy_names();
+    $row['can_manage']     = current_user_can('bt_manage_portal_users');
+    $row['legacy_names']   = btp_legacy_names();
+    $row['google_enabled'] = (btp_google_client_id() !== '');
+    $row['google_linked']  = (get_user_meta($u->ID, 'btp_google_sub', true) !== '');
+    $row['google_email']   = (string) get_user_meta($u->ID, 'btp_google_email', true);
     return rest_ensure_response($row);
 }
 
@@ -1038,6 +1248,34 @@ function btp_rest_account_reset() {
         return new WP_Error('btp_reset_failed', 'Could not send the email. Try again shortly.', array('status' => 500));
     }
     return rest_ensure_response(array('ok' => true, 'email' => $u->user_email));
+}
+
+/** Link the signed-in account to a Google identity. Never steals a sub already linked elsewhere. */
+function btp_rest_account_google_link($req) {
+    $p = $req->get_json_params();
+    $claim = btp_verify_google_id_token($p['credential'] ?? '');
+    if (is_wp_error($claim)) {
+        return new WP_Error('btp_google_bad', 'Could not verify that Google sign-in. Try again.', array('status' => 400));
+    }
+
+    $me = get_current_user_id();
+    $existing = btp_user_by_google_sub($claim['sub']);
+    if ($existing && (int) $existing->ID !== $me) {
+        return new WP_Error('btp_google_taken',
+            'That Google account is already linked to a different portal login.', array('status' => 409));
+    }
+
+    update_user_meta($me, 'btp_google_sub', $claim['sub']);
+    update_user_meta($me, 'btp_google_email', $claim['email']);
+    return rest_ensure_response(array('ok' => true, 'email' => $claim['email']));
+}
+
+/** Unlinking never locks anyone out — the password still works. */
+function btp_rest_account_google_unlink() {
+    $me = get_current_user_id();
+    delete_user_meta($me, 'btp_google_sub');
+    delete_user_meta($me, 'btp_google_email');
+    return rest_ensure_response(array('ok' => true));
 }
 
 function btp_rest_users() {
