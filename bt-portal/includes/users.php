@@ -327,6 +327,103 @@ function btp_is_setpass_request() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   FORGOT PASSWORD — request screen
+
+   A portal-native replacement for wp-login.php?action=lostpassword so the
+   person never leaves the branded screen, and so the two gaps that WP core's
+   own flow leaves open are closed:
+
+     - Core's lost-password form answers "Invalid username or email" when the
+       account does not exist, which confirms or denies an account by wording
+       alone. This screen says the same thing either way.
+     - Core puts no limit on how many times retrieve_password() can be called.
+       This adds the same per-account + per-IP cooldown used on login itself.
+
+   The actual key — random, hashed, 1 hour TTL, single use — is still WP
+   core's get_password_reset_key()/check_password_reset_key() machinery via
+   retrieve_password(); btp_reset_message() above already points the mailed
+   link at the portal's own set-password screen. No second token system.
+   ───────────────────────────────────────────────────────────────────── */
+
+/** True when the current request is the forgot-password screen. */
+function btp_is_forgot_request() {
+    return ($_GET['btp_action'] ?? '') === 'forgot';
+}
+
+/**
+ * Resolve "username or email" to a user account, the same way the login form
+ * already accepts either. Returns null rather than leaking which case matched.
+ */
+function btp_find_user_by_login_or_email($login) {
+    $login = trim((string) $login);
+    if ($login === '') return null;
+    $user = is_email($login) ? get_user_by('email', $login) : get_user_by('login', $login);
+    return $user ?: null;
+}
+
+/**
+ * Per-account and per-IP cooldown on reset *requests*, separate from the
+ * failed-login counter above. Same transient pattern, lower ceiling: a
+ * reset email is far noisier to receive by accident than a rejected login.
+ */
+function btp_forgot_rate_limited($identifier) {
+    $ip_key  = 'btp_rp_ip_' . md5(btp_client_ip());
+    $acc_key = 'btp_rp_acc_' . md5(strtolower($identifier));
+
+    if ((int) get_transient($ip_key) >= 10)  return true;  // per IP, any account
+    if ((int) get_transient($acc_key) >= 3)  return true;  // per account, any IP
+
+    return false;
+}
+
+function btp_forgot_rate_limit_bump($identifier) {
+    $ip_key  = 'btp_rp_ip_' . md5(btp_client_ip());
+    $acc_key = 'btp_rp_acc_' . md5(strtolower($identifier));
+
+    set_transient($ip_key,  (int) get_transient($ip_key)  + 1, 15 * MINUTE_IN_SECONDS);
+    set_transient($acc_key, (int) get_transient($acc_key) + 1, HOUR_IN_SECONDS);
+}
+
+/**
+ * Handle the "send me a reset link" submission. Always shows the same
+ * confirmation whether or not the account exists, has portal access, or the
+ * mail actually went out — none of that is the requester's business, and
+ * silently doing nothing is less suspicious than a different screen.
+ */
+function btp_handle_forgot() {
+    if (!btp_is_forgot_request()) return;
+    if (empty($_POST['btp_forgot_submit'])) return;
+    if (!isset($_POST['_wpnonce']) || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'btp_forgot')) {
+        $GLOBALS['btp_forgot_error'] = 'This page had been sitting open too long. Try again.';
+        return;
+    }
+
+    $identifier = sanitize_text_field(wp_unslash($_POST['btp_forgot_user'] ?? ''));
+    if ($identifier === '') {
+        $GLOBALS['btp_forgot_error'] = 'Enter your username or email.';
+        return;
+    }
+
+    if (btp_forgot_rate_limited($identifier)) {
+        // Deliberately the *same* wording as success — a rate-limit message
+        // that only appears for real accounts would itself be a leak.
+        $GLOBALS['btp_forgot_sent'] = true;
+        return;
+    }
+    btp_forgot_rate_limit_bump($identifier);
+
+    $user = btp_find_user_by_login_or_email($identifier);
+    if ($user && user_can($user, 'bt_portal_access')) {
+        retrieve_password($user->user_login);
+    }
+    // No branch on the result: wrong identifier, no portal access, and mail
+    // failure all land here, and all look identical to the person asking.
+
+    $GLOBALS['btp_forgot_sent'] = true;
+}
+add_action('template_redirect', 'btp_handle_forgot', 4);
+
+/* ─────────────────────────────────────────────────────────────────────────
    THE GATE SCREENS
    ───────────────────────────────────────────────────────────────────── */
 
@@ -426,7 +523,9 @@ function btp_should_prompt_change() {
 
 /** Entry point for the shortcode when the visitor has no portal access. */
 function btp_login_form_html() {
-    return btp_is_setpass_request() ? btp_setpass_form_html() : btp_login_screen_html();
+    if (btp_is_setpass_request()) return btp_setpass_form_html();
+    if (btp_is_forgot_request())  return btp_forgot_form_html();
+    return btp_login_screen_html();
 }
 
 function btp_login_screen_html() {
@@ -443,7 +542,7 @@ function btp_login_screen_html() {
 
     <?php wp_nonce_field('btp_login'); ?>
 
-    <label for="btp_user">Username</label>
+    <label for="btp_user">Username or email</label>
     <input type="text" name="btp_user" id="btp_user" required autofocus
            autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username"
            value="<?php echo esc_attr(wp_unslash($_POST['btp_user'] ?? '')); ?>">
@@ -459,7 +558,46 @@ function btp_login_screen_html() {
     <button type="submit" name="btp_login_submit" value="1">LOG IN</button>
 
     <a class="btp-login-forgot"
-       href="<?php echo esc_url(wp_lostpassword_url(btp_current_url())); ?>">Forgot your password?</a>
+       href="<?php echo esc_url(add_query_arg('btp_action', 'forgot', btp_portal_base_url())); ?>">Forgot your password?</a>
+  </form>
+</div>
+<?php echo btp_login_styles(); ?>
+    <?php
+    return ob_get_clean();
+}
+
+function btp_forgot_form_html() {
+    $error = $GLOBALS['btp_forgot_error'] ?? '';
+    $sent  = $GLOBALS['btp_forgot_sent'] ?? false;
+    ob_start();
+    ?>
+<div id="btp-login">
+  <form method="post" class="btp-login-card">
+    <div class="btp-login-brand">EMPLOYEE <span>PORTAL</span></div>
+
+    <?php if ($sent) : ?>
+      <p class="btp-login-help">If that account has portal access, a reset link is on its way.
+        Check your email &mdash; it&rsquo;s good for 1 hour and only works once.</p>
+      <a class="btp-login-btnlink"
+         href="<?php echo esc_url(btp_portal_base_url()); ?>">BACK TO SIGN IN</a>
+    <?php else : ?>
+      <p class="btp-login-help">Enter your username or email and we&rsquo;ll send a link to pick a new
+        password.</p>
+
+      <?php if ($error) : ?><div class="btp-login-error"><?php echo esc_html($error); ?></div><?php endif; ?>
+
+      <?php wp_nonce_field('btp_forgot'); ?>
+
+      <label for="btp_forgot_user">Username or email</label>
+      <input type="text" name="btp_forgot_user" id="btp_forgot_user" required autofocus
+             autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username"
+             value="<?php echo esc_attr(wp_unslash($_POST['btp_forgot_user'] ?? '')); ?>">
+
+      <button type="submit" name="btp_forgot_submit" value="1">SEND RESET LINK</button>
+
+      <a class="btp-login-forgot"
+         href="<?php echo esc_url(btp_portal_base_url()); ?>">Back to sign in</a>
+    <?php endif; ?>
   </form>
 </div>
 <?php echo btp_login_styles(); ?>
@@ -483,7 +621,7 @@ function btp_setpass_form_html() {
       <p class="btp-login-help">Password links are good for 24 hours. Ask for a fresh one and it will
         arrive by email in a minute or two.</p>
       <a class="btp-login-btnlink"
-         href="<?php echo esc_url(wp_lostpassword_url(btp_portal_base_url())); ?>">SEND ME A NEW LINK</a>
+         href="<?php echo esc_url(add_query_arg('btp_action', 'forgot', btp_portal_base_url())); ?>">SEND ME A NEW LINK</a>
     <?php else : ?>
       <p class="btp-login-help">Welcome, <strong><?php echo esc_html($user->display_name); ?></strong>.
         Pick a password and you&rsquo;re in. Your username is
