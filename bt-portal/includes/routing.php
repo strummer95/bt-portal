@@ -40,6 +40,8 @@ function btp_tab_map() {
         'bruce'            => 'bruceart',   // convenience alias
         'follow-up'        => 'followup',
         'followup'         => 'followup',   // convenience alias
+        'halftoner'        => 'halftoner',
+        'halftone'         => 'halftoner',  // convenience alias
     ) );
 }
 
@@ -70,6 +72,7 @@ function btp_tab_labels() {
         'blanks'    => 'Blank Orders',
         'bruceart'  => 'Bruce Art',
         'followup'  => 'Follow Up',
+        'halftoner' => 'Halftoner',
         'vendors'   => 'Vendors',
     ) );
 }
@@ -97,6 +100,7 @@ function btp_tab_slugs() {
         'blanks'    => 'blank-orders',
         'bruceart'  => 'bruce-art',
         'followup'  => 'follow-up',
+        'halftoner' => 'halftoner',
         'vendors'   => 'vendors',
     );
 }
