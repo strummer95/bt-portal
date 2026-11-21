@@ -1,11 +1,11 @@
 # BT Portal
 
 Boomer T's employee portal. Schedule board, online stores, quote tab, redirect tool,
-contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT Accounts orders, Bruce Art, day notes, backups, and the
+contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT Accounts orders, Bruce Art, Halftoner, day notes, backups, and the
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.60.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.61.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -499,3 +499,12 @@ button (`POST /followup/ignore-bulk`, items of email + cycle + event key, cap 10
 events that are under, so a $45 polo does not take an $850 yearly order on the same card with it.
 On the Ignored pill the same button undoes. Bulk is click-twice-within-5s, not a popup. The page's
 `.fu-btn` click handler is scoped to `[data-act]` so it does not swallow the bulk button.
+
+## Other > Halftoner (0.60.0)
+
+The tool is its own plugin, **BT Halftoner** (`strummer95/bt-halftoner`, shortcode `[bt_halftoner]`), the
+same arrangement as the Quote tab and BT Quote. The portal only hosts it: menu item and pane render
+when `shortcode_exists('bt_halftoner')`, tab id `halftoner`, slug `halftoner` (alias `halftone`).
+`btSwitchTab()` calls `window.bthShow()` on open so the previews redraw at a real width. All of the
+halftone logic, and its notes, live in that repo. An early 0.60.0 build had the tool inside the portal;
+it was moved out before release at Dillon's request.
