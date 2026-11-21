@@ -320,16 +320,110 @@ function btp_verify_google_id_token($credential) {
     return array('sub' => $sub, 'email' => $email);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   GOOGLE LINK TABLE
+
+   A dedicated table instead of usermeta, because the sub -> user mapping
+   needs a real uniqueness guarantee. usermeta has no unique index across
+   (meta_key, meta_value), so a plain "is this sub already taken?" check
+   followed by update_user_meta() leaves a check-then-write race: two
+   requests claiming the same Google account concurrently (e.g. the login
+   auto-link and the account-panel "Link Google account" firing at once)
+   could both read "not yet linked" and both succeed, defeating the 409
+   "already linked elsewhere" guard entirely. The table's PRIMARY KEY on
+   google_sub makes the claim in btp_google_sub_claim() below atomic: only
+   one of two racing INSERTs for the same sub can ever hold the row.
+   ───────────────────────────────────────────────────────────────────── */
+
+define('BTP_GOOGLE_LINKS_DB_VERSION', '1');
+
+function btp_google_links_table() { global $wpdb; return $wpdb->prefix . 'btp_google_links'; }
+
+function btp_google_links_install() {
+    if (get_option('btp_google_links_db_version') === BTP_GOOGLE_LINKS_DB_VERSION) return;
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    $charset = $GLOBALS['wpdb']->get_charset_collate();
+    dbDelta("CREATE TABLE IF NOT EXISTS " . btp_google_links_table() . " (
+        google_sub VARCHAR(64) NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL,
+        email VARCHAR(190) NOT NULL DEFAULT '',
+        linked_at DATETIME NULL,
+        PRIMARY KEY (google_sub),
+        KEY user_id (user_id)
+    ) $charset;");
+    update_option('btp_google_links_db_version', BTP_GOOGLE_LINKS_DB_VERSION);
+}
+add_action('init', 'btp_google_links_install', 2);
+
 /** The portal/admin account already linked to this Google subject, if any. */
 function btp_user_by_google_sub($sub) {
     $sub = (string) $sub;
     if ($sub === '') return null;
-    $users = get_users(array(
-        'meta_key'   => 'btp_google_sub',
-        'meta_value' => $sub,
-        'number'     => 1,
+    global $wpdb;
+    $user_id = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT user_id FROM " . btp_google_links_table() . " WHERE google_sub = %s", $sub
     ));
-    return $users ? $users[0] : null;
+    return $user_id ? get_userdata($user_id) : null;
+}
+
+/** The Google link this user currently holds, if any: array('google_sub' => ..., 'email' => ...) or null. */
+function btp_google_link_for_user($user_id) {
+    global $wpdb;
+    $row = $wpdb->get_row($wpdb->prepare(
+        "SELECT google_sub, email FROM " . btp_google_links_table() . " WHERE user_id = %d", (int) $user_id
+    ), ARRAY_A);
+    return $row ?: null;
+}
+
+/**
+ * Atomically claim a Google subject for a user. The PRIMARY KEY on
+ * google_sub is the lock: if two requests race to INSERT the same sub, only
+ * one wins and the loser's ON DUPLICATE KEY clause is a no-op (updates the
+ * key to itself), so re-reading the row right after always reports the true
+ * winner regardless of which request got there first.
+ * Returns true if $user_id ends up owning $sub, false if someone else does.
+ */
+function btp_google_sub_claim($sub, $user_id, $email) {
+    global $wpdb;
+    $table = btp_google_links_table();
+    $wpdb->query($wpdb->prepare(
+        "INSERT INTO $table (google_sub, user_id, email, linked_at) VALUES (%s, %d, %s, %s)
+         ON DUPLICATE KEY UPDATE google_sub = google_sub",
+        $sub, (int) $user_id, $email, current_time('mysql')
+    ));
+    $owner = (int) $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $table WHERE google_sub = %s", $sub));
+    if ($owner !== (int) $user_id) return false;
+    $wpdb->update($table, array('email' => $email), array('google_sub' => $sub));
+    return true;
+}
+
+/** Unlinking never locks anyone out — the password still works. */
+function btp_google_sub_release($user_id) {
+    global $wpdb;
+    $wpdb->delete(btp_google_links_table(), array('user_id' => (int) $user_id));
+}
+
+/**
+ * Bump a transient failure counter atomically. get_transient()/set_transient()
+ * are a plain read-then-write under the hood (not atomic), so concurrent
+ * failed attempts can all read the same pre-increment value and undercount —
+ * defeating a lockout. A single INSERT ... ON DUPLICATE KEY UPDATE sidesteps
+ * that the same way btp_google_sub_claim() does: it's one atomic statement,
+ * so there's no window between reading the current count and writing the
+ * next one for two concurrent failures to both read the same value.
+ */
+function btp_bump_fail_counter($key, $ttl) {
+    global $wpdb;
+    $name = '_transient_' . $key;
+    $wpdb->query($wpdb->prepare(
+        "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '1', 'no')
+         ON DUPLICATE KEY UPDATE option_value = option_value + 1",
+        $name
+    ));
+    // The timeout half only needs to exist once; a redundant add on a rare
+    // concurrent first-failure just rewrites the same expiry, not a count.
+    $timeout_name = '_transient_timeout_' . $key;
+    if (get_option($timeout_name) === false) add_option($timeout_name, time() + $ttl, '', 'no');
 }
 
 function btp_handle_google_login() {
@@ -354,15 +448,14 @@ function btp_handle_google_login() {
     if (!$user && !is_wp_error($claim)) {
         $existing = get_user_by('email', $claim['email']);
         if ($existing && user_can($existing, 'bt_portal_access')
-            && !get_user_meta($existing->ID, 'btp_google_sub', true)) {
-            update_user_meta($existing->ID, 'btp_google_sub', $claim['sub']);
-            update_user_meta($existing->ID, 'btp_google_email', $claim['email']);
+            && !btp_google_link_for_user($existing->ID)
+            && btp_google_sub_claim($claim['sub'], $existing->ID, $claim['email'])) {
             $user = $existing;
         }
     }
 
     if (!$user || !user_can($user, 'bt_portal_access')) {
-        set_transient($key, (int) get_transient($key) + 1, 15 * MINUTE_IN_SECONDS);
+        btp_bump_fail_counter($key, 15 * MINUTE_IN_SECONDS);
         // Deliberately vague, same reasoning as the password login above.
         $GLOBALS['btp_login_error'] = 'Could not sign in with that Google account.';
         return;
@@ -1235,9 +1328,10 @@ function btp_rest_account() {
     $row = btp_rest_user_row($u);
     $row['can_manage']     = current_user_can('bt_manage_portal_users');
     $row['legacy_names']   = btp_legacy_names();
+    $link = btp_google_link_for_user($u->ID);
     $row['google_enabled'] = (btp_google_client_id() !== '');
-    $row['google_linked']  = (get_user_meta($u->ID, 'btp_google_sub', true) !== '');
-    $row['google_email']   = (string) get_user_meta($u->ID, 'btp_google_email', true);
+    $row['google_linked']  = ($link !== null);
+    $row['google_email']   = $link ? (string) $link['email'] : '';
     return rest_ensure_response($row);
 }
 
@@ -1259,22 +1353,16 @@ function btp_rest_account_google_link($req) {
     }
 
     $me = get_current_user_id();
-    $existing = btp_user_by_google_sub($claim['sub']);
-    if ($existing && (int) $existing->ID !== $me) {
+    if (!btp_google_sub_claim($claim['sub'], $me, $claim['email'])) {
         return new WP_Error('btp_google_taken',
             'That Google account is already linked to a different portal login.', array('status' => 409));
     }
 
-    update_user_meta($me, 'btp_google_sub', $claim['sub']);
-    update_user_meta($me, 'btp_google_email', $claim['email']);
     return rest_ensure_response(array('ok' => true, 'email' => $claim['email']));
 }
 
-/** Unlinking never locks anyone out — the password still works. */
 function btp_rest_account_google_unlink() {
-    $me = get_current_user_id();
-    delete_user_meta($me, 'btp_google_sub');
-    delete_user_meta($me, 'btp_google_email');
+    btp_google_sub_release(get_current_user_id());
     return rest_ensure_response(array('ok' => true));
 }
 

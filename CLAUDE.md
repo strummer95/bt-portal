@@ -5,7 +5,7 @@ contacts, exchange tracking, vendors, OMG and Chipply scanners, Blank Orders, BT
 `[bt_schedule]` shortcode.
 
 - Site: boomerts.com, page `/employees/`
-- Current version: **0.61.0**. Constant `BTP_VERSION`, function prefix `btp_`.
+- Current version: **0.62.0**. Constant `BTP_VERSION`, function prefix `btp_`.
 - Repo: `strummer95/bt-portal`
 
 ## Environment (read this before anything else)
@@ -151,6 +151,16 @@ while already signed in with a password; linking there has no email-match requir
 409 if that Google `sub` is already linked to a *different* portal account. Unlinking never
 locks anyone out — the password still works. A failed Google sign-in buys the same per-IP 15
 minute cooldown as a failed password one, keyed separately so the two don't share a budget.
+
+The sub -> user mapping lives in its own table (`wp_btp_google_links`, `PRIMARY KEY
+(google_sub)`), not usermeta: usermeta has no cross-row unique index, so a plain
+check-then-`update_user_meta()` left a race where two concurrent claims (e.g. the login
+auto-link and the account panel's Link button firing at once) could both see "unclaimed" and
+both win, linking one Google account to two portal logins. `btp_google_sub_claim()` does a
+single `INSERT ... ON DUPLICATE KEY UPDATE` instead, so the table's own key decides the one
+winner. The cooldown counters (`btp_bump_fail_counter()`) use the same atomic-upsert idiom for
+the same reason — plain `get_transient()`/`set_transient()` is a read-then-write, so concurrent
+failures can undercount and stretch past 5 attempts before locking.
 
 ## Security issue fixed, pending Dillon's confirmation before deploy
 
