@@ -46,12 +46,30 @@ function btp_printavo_creds() {
         $v = get_option($k);
         if (!empty($v)) { $email = trim($v); $email_key = $k; break; }
     }
-    foreach ($token_keys as $k) {
-        $v = get_option($k);
-        if (!empty($v)) { $token = trim($v); $token_key = $k; break; }
+    if (defined('BTP_PRINTAVO_TOKEN') && BTP_PRINTAVO_TOKEN) {
+        // wp-config.php wins: the token never has to sit in the database.
+        $token     = trim((string) BTP_PRINTAVO_TOKEN);
+        $token_key = 'wp-config.php BTP_PRINTAVO_TOKEN';
+    } else {
+        foreach ($token_keys as $k) {
+            $v = get_option($k);
+            if (!empty($v)) { $token = btp_printavo_unseal(trim($v)); $token_key = $k; break; }
+        }
     }
 
     return array('email' => $email, 'token' => $token, 'email_key' => $email_key, 'token_key' => $token_key);
+}
+
+/**
+ * The token is saved encrypted with the vendor-password key (vendors.php).
+ * A value saved before that (or by the old snippet) is plain text and is
+ * still read as-is until the token is saved again.
+ */
+function btp_printavo_unseal($v) {
+    if ((strpos($v, 'v1:') === 0 || strpos($v, 'o1:') === 0) && function_exists('btp_vendor_decrypt')) {
+        return trim(btp_vendor_decrypt($v));
+    }
+    return $v;
 }
 
 /* ── transport ───────────────────────────────────────────────────────── */
@@ -280,7 +298,10 @@ function btp_printavo_admin_page() {
     if (isset($_POST['btp_printavo_save']) && check_admin_referer('btp_printavo_save')) {
         update_option('btp_printavo_email', sanitize_text_field(wp_unslash($_POST['btp_printavo_email'])));
         $token = trim(wp_unslash($_POST['btp_printavo_token']));
-        if ($token !== '') update_option('btp_printavo_token', sanitize_text_field($token));
+        if ($token !== '') {
+            $token = sanitize_text_field($token);
+            update_option('btp_printavo_token', function_exists('btp_vendor_encrypt') ? btp_vendor_encrypt($token) : $token, false);
+        }
         btp_printavo_flush_cache();
         $notice = 'Saved. Cached lookups flushed.';
     }
