@@ -2477,6 +2477,18 @@ function btAttr(v) {
   return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+/* Safe to drop into href="...": blocks javascript:/data: etc, and btAttr()
+   on top stops a stray quote from breaking out of the attribute. Store
+   links are staff-entered free text (sanitize_text_field only strips tags,
+   it doesn't validate the URL), so this is the only thing standing between
+   a saved link and script execution for whoever opens the Online Stores tab. */
+function btSafeUrl(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  if (/^(https?:|mailto:)/i.test(s) || /^[/.#]/.test(s)) return btAttr(s);
+  return '';
+}
+
 function btCopyStoreLink(ev, btn) {
   ev.preventDefault(); ev.stopPropagation();
   const url = btn.dataset.copy || '';
@@ -2531,7 +2543,7 @@ function btStoreCodeCell(store) {
   if (!code) return '';
   var plat = btStorePlatform(store.link);
   if (store.link) {
-    return '<a href="' + btAttr(store.link) + '" class="store-code" target="_blank" rel="noopener" '
+    return '<a href="' + btSafeUrl(store.link) + '" class="store-code" target="_blank" rel="noopener" '
          + 'title="' + btAttr('Open ' + (plat ? plat + ' store' : 'store')) + '" '
          + 'onclick="event.stopPropagation()">' + escHtmlBt(code) + '</a>';
   }
@@ -2664,9 +2676,9 @@ function btRenderStores() {
         <td>${fmtDate(store.openDate)}</td><td>${fmtDate(store.closeDate,'N/A')}</td>
         <td><span class="store-status-badge ${sCls}">${store.status}</span></td>
         <td><span class="store-status-badge" style="${fStyle}">${store.fulfillment||'—'}</span></td>
-        <td style="font-size:13px;line-height:1.35;overflow-wrap:anywhere;">${store.contactName?`<span style="font-weight:600;color:#1a1f5e;display:block;font-size:14px;">${store.contactName}</span>`:''}${store.contactEmail?`<a href="mailto:${store.contactEmail}" onclick="event.stopPropagation()" style="color:#9ca3b8;font-size:12px;text-decoration:none;">${store.contactEmail}</a>`:(!store.contactName?'—':'')}</td>
+        <td style="font-size:13px;line-height:1.35;overflow-wrap:anywhere;">${store.contactName?`<span style="font-weight:600;color:#1a1f5e;display:block;font-size:14px;">${store.contactName}</span>`:''}${store.contactEmail?`<a href="mailto:${btAttr(store.contactEmail)}" onclick="event.stopPropagation()" style="color:#9ca3b8;font-size:12px;text-decoration:none;">${store.contactEmail}</a>`:(!store.contactName?'—':'')}</td>
         <td style="font-size:15px;color:#1a1f5e;line-height:1.4;">${store.notes||''}</td>
-        <td>${store.link?`<span class="store-link-cell"><a href="${store.link}" class="store-link" target="_blank" onclick="event.stopPropagation()">VIEW</a><button type="button" class="store-copy-btn" title="Copy store URL" data-copy="${btAttr(store.link)}" onclick="btCopyStoreLink(event,this)">${BTP_COPY_ICON}</button></span>`:''}</td>`;
+        <td>${store.link?`<span class="store-link-cell"><a href="${btSafeUrl(store.link)}" class="store-link" target="_blank" onclick="event.stopPropagation()">VIEW</a><button type="button" class="store-copy-btn" title="Copy store URL" data-copy="${btAttr(store.link)}" onclick="btCopyStoreLink(event,this)">${BTP_COPY_ICON}</button></span>`:''}</td>`;
 
       tr.addEventListener('click', e => { if(e.target.tagName==='A'||e.target.closest('.store-copy-btn')||e.target.classList.contains('store-drag-handle')) return; btOpenStoreModal(store.id); });
 
@@ -2723,7 +2735,7 @@ function btRenderStores() {
             <span class="store-card-label">Close</span><span class="store-card-value">${fmtDate(store.closeDate,'N/A')}</span>
           </div>
           ${store.notes ? `<div class="store-card-notes">${store.notes}</div>` : ''}
-          ${store.link ? `<span class="store-link-cell" style="align-self:flex-start"><a href="${store.link}" class="store-link" target="_blank" onclick="event.stopPropagation()">VIEW</a><button type="button" class="store-copy-btn" title="Copy store URL" data-copy="${btAttr(store.link)}" onclick="btCopyStoreLink(event,this)">${BTP_COPY_ICON}</button></span>` : ''}`;
+          ${store.link ? `<span class="store-link-cell" style="align-self:flex-start"><a href="${btSafeUrl(store.link)}" class="store-link" target="_blank" onclick="event.stopPropagation()">VIEW</a><button type="button" class="store-copy-btn" title="Copy store URL" data-copy="${btAttr(store.link)}" onclick="btCopyStoreLink(event,this)">${BTP_COPY_ICON}</button></span>` : ''}`;
         cards.appendChild(card);
       }
     });
