@@ -114,9 +114,19 @@ function btp_exchange_woo_status_for( $status ) {
 /* ============================================================
  * 3. PERMISSION — this route set reads customer names, emails and
  *    addresses and writes order notes, so unlike the job/store
- *    routes it is not open. Same nonce gate as woo.php.
+ *    routes it is not open. Same gate as the rest of the portal
+ *    (btp_rest_can_access, defined in users.php, loaded first),
+ *    plus the wp_rest nonce for CSRF protection. A bare wp_rest
+ *    nonce check alone would pass for ANY logged-in WP user,
+ *    including WooCommerce customer accounts — not just portal
+ *    staff — since that nonce only proves "logged in", not
+ *    "has bt_portal_access". This is the only caller (the
+ *    in-portal Exchanges tab's btFetch()), never a customer page.
  * ============================================================ */
 function btp_ex_perm( $request ) {
+    if ( ! btp_rest_can_access() ) {
+        return new WP_Error('btp_forbidden', 'Portal session required.', ['status' => 403]);
+    }
     $nonce = $request->get_header('X-WP-Nonce');
     if ( $nonce && wp_verify_nonce($nonce, 'wp_rest') ) return true;
     return new WP_Error('btp_forbidden', 'Portal session required.', ['status' => 403]);
