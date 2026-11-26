@@ -36,9 +36,18 @@ add_action('init', function() {
 /* ============================================================
  * 2. PERMISSION — this one mutates orders and emails customers,
  *    so unlike the rest of the portal routes it is not open.
- *    Requires the wp_rest nonce minted on the portal page.
+ *    Requires btp_rest_can_access (portal staff, same gate as the
+ *    rest of boomerts/v1 — defined in users.php, loaded first)
+ *    plus the wp_rest nonce minted on the portal page. A bare
+ *    wp_rest nonce check alone would pass for ANY logged-in WP
+ *    user, including WooCommerce customer accounts, not just
+ *    portal staff. This is only ever called from the Transfers
+ *    job card's Complete button in the staff-only portal.
  * ============================================================ */
 function btp_woo_perm( $request ) {
+    if ( ! btp_rest_can_access() ) {
+        return new WP_Error('btp_forbidden', 'Portal session required.', ['status' => 403]);
+    }
     $nonce = $request->get_header('X-WP-Nonce');
     if ( $nonce && wp_verify_nonce($nonce, 'wp_rest') ) return true;
     return new WP_Error('btp_forbidden', 'Portal session required.', ['status' => 403]);
