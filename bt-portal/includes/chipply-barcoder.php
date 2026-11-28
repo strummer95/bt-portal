@@ -156,7 +156,15 @@ function btp_chipply_barcoder_shortcode() {
 @media (prefers-reduced-motion: reduce) { #bt-barcoder * { transition:none !important; } }
 </style>
 
-<script src="<?php echo esc_url($base . 'pdf.min.js?v=' . $v); ?>"></script>
+<script type="module">
+  /* pdf.js 4.x (patched for CVE-2024-4367) ships ES module builds only — no
+     UMD/global bundle — so it's imported here and handed to the classic
+     script below as window.pdfjsLib, keeping that script's API calls
+     (GlobalWorkerOptions, getDocument) unchanged. */
+  import * as pdfjsLib from <?php echo wp_json_encode($base . 'pdf.min.js?v=' . $v); ?>;
+  window.pdfjsLib = pdfjsLib;
+  window.dispatchEvent(new Event('bt-pdfjs-ready'));
+</script>
 <script src="<?php echo esc_url($base . 'pdf-lib.min.js?v=' . $v); ?>"></script>
 <script>
 (function () {
@@ -164,6 +172,8 @@ function btp_chipply_barcoder_shortcode() {
 
   var WORKER = <?php echo wp_json_encode($base . 'pdf.worker.min.js?v=' . $v); ?>;
   var PANE   = 'bt-tab-barcoder';
+  var pdfjsReady = window.pdfjsLib ? Promise.resolve() :
+    new Promise(function (resolve) { window.addEventListener('bt-pdfjs-ready', resolve, { once: true }); });
 
   /* Code 128 subset B. Index is the symbol value; each string is the run of
      bar/space widths in modules, starting with a bar. */
@@ -292,6 +302,7 @@ function btp_chipply_barcoder_shortcode() {
 
     try {
       var buf = await file.arrayBuffer();
+      await pdfjsReady;
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER;
 
       var doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(buf.slice(0)) }).promise;
